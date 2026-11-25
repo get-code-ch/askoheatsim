@@ -1,0 +1,86 @@
+# Home Assistant : connexion au simulateur (ou plus tard au vrai ASKOHEAT+)
+# Fichier « package » : dans configuration.yaml, ajouter
+#   homeassistant:
+#     packages:
+#       askoheat: !include packages/askoheat.yaml
+# puis copier ce fichier dans config/packages/askoheat.yaml.
+#
+# Pour passer au vrai appareil, il suffit de changer "host" (et "port: 502").
+# Remarque : selon la version de HA, la clé s'appelle "device_address"
+# (récent) ou "slave" (ancien). L'ASKOHEAT+ ignore l'identifiant d'unité.
+
+modbus:
+  - name: askoheat
+    type: tcp
+    host: askoheatsim.askoheatsim.svc.cluster.local   # le vrai appareil : son IP
+    port: 502
+    timeout: 5
+    sensors:
+      - name: Askoheat température haut
+        unique_id: askoheat_temp_haut
+        address: 100                 # sonde 1
+        input_type: input
+        data_type: uint16
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        scan_interval: 10
+      - name: Askoheat température bride
+        unique_id: askoheat_temp_bride
+        address: 714                 # sonde 0, float32 (706-715 = sondes 4..0)
+        input_type: input
+        data_type: float32
+        precision: 1
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        scan_interval: 10
+      - name: Askoheat puissance
+        unique_id: askoheat_puissance
+        address: 110
+        input_type: input
+        data_type: uint16
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        scan_interval: 5
+      - name: Askoheat état
+        unique_id: askoheat_etat
+        address: 109
+        input_type: input
+        data_type: uint16
+        scan_interval: 5
+      - name: Askoheat injection reçue
+        unique_id: askoheat_injection_recue
+        address: 202
+        input_type: holding
+        data_type: int16
+        unit_of_measurement: W
+        scan_interval: 10
+
+# ---------------------------------------------------------------------------
+# Automation : envoyer la puissance réseau toutes les 10 s (watchdog = 60 s).
+# gPlug : sensor.gplugd_pi_1_7 (soutirage) et sensor.gplugd_po_2_7 (injection), en kW.
+# Valeur envoyée = soutirage − injection, en W (négatif = surplus), convertie en
+# complément à deux (registre int16).
+automation:
+  - alias: "ASKOHEAT – envoyer la valeur d'injection"
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        seconds: "/10"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ states('sensor.gplugd_pi_1_7') | is_number
+             and states('sensor.gplugd_po_2_7') | is_number }}
+    actions:
+      - action: modbus.write_register
+        data:
+          hub: askoheat
+          slave: 1
+          address: 202
+          value: >-
+            {% set p = ((states('sensor.gplugd_pi_1_7') | float
+                        - states('sensor.gplugd_po_2_7') | float) * 1000) | int %}
+            {{ ([[-30000, p] | max, 30000] | min) % 65536 }}

@@ -1,0 +1,13 @@
+# Déployé par Argo CD (Application askoheatsim, définie dans talos_joran_local/23_askoheatsim).
+# Le namespace vient de destination.namespace de l'Application.
+# Le code est monté depuis une ConfigMap dans l'image officielle python:3.13-slim : pas d'image à construire.
+# Test manuel : kubectl apply -k . -n <namespace>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - k8s/deployment.yaml
+configMapGenerator:
+  - name: askoheatsim-code
+    files:
+      - askoheat_sim.py
+      - index.html
