@@ -65,6 +65,7 @@ button, select, input[type=number] { font: inherit; padding: 6px 10px; border-ra
 button { cursor: pointer; } button:hover { border-color: var(--text-secondary); }
 button.primary { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
 input[type=number] { width: 100px; }
+.check input:disabled { opacity: 1; cursor: default; }
 .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; color: var(--text-primary); font-size: 13px; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
 td, th { padding: 4px 6px; border-bottom: 1px solid var(--grid); text-align: left; }
@@ -215,14 +216,14 @@ canvas { width: 100%; display: block; }
         <button id="b-hp">Contact PAC : ouvert</button>
       </div>
       <label>Registre 502 · entrées autorisées</label>
-      <div class="check"><input type="checkbox" id="i502-4"> bit 4 · étage (200)</div>
-      <div class="check"><input type="checkbox" id="i502-3"> bit 3 · consigne (201)</div>
-      <div class="check"><input type="checkbox" id="i502-2"> bit 2 · injection (202)</div>
+      <div class="check"><input type="checkbox" id="i502-4" disabled> bit 4 · étage (200)</div>
+      <div class="check"><input type="checkbox" id="i502-3" disabled> bit 3 · consigne (201)</div>
+      <div class="check"><input type="checkbox" id="i502-2" disabled> bit 2 · injection (202)</div>
       <label>Registre 504 · arrêt automatique</label>
-      <div class="check"><input type="checkbox" id="i504-0"> bit 0 · arrêt après 60 s sans écriture</div>
+      <div class="check"><input type="checkbox" id="i504-0" disabled> bit 0 · arrêt après 60 s sans écriture</div>
       <label>Valeur d'injection (reg. 202)</label>
-      <div class="check"><input type="checkbox" id="i-comp"> La mesure envoyée n'inclut pas le corps de chauffe simulé (le simulateur ajoute sa propre charge)</div>
-      <div class="note">Cochez cette case quand HA envoie la mesure d'un vrai compteur (gPlug) : le compteur ne voit pas la consommation simulée.</div>
+      <div class="check"><input type="checkbox" id="i-comp" disabled> La mesure envoyée n'inclut pas le corps de chauffe simulé (le simulateur ajoute sa propre charge)</div>
+      <div class="note">Affichage seulement : ces réglages sont fixés au déploiement (variables <code>INPUT_SETTING</code>, <code>AUTO_OFF</code> et <code>COMPENSATE</code>). Home Assistant peut toujours écrire les registres 502 et 504 en Modbus, comme sur l'appareil.</div>
     </section>
 
     <section class="card">
@@ -430,11 +431,6 @@ $('i-speed').onchange = e => post({speed: +e.target.value});
 $('b-reset').onclick = () => post({reset_temp: +$('i-reset').value});
 $('b-emerg').onclick = () => post({emergency: !S.emergency});
 $('b-hp').onclick = () => post({hp_request: !S.hp_request});
-$('i-comp').onchange = e => post({compensate: e.target.checked});
-[4, 3, 2].forEach(b => $('i502-' + b).onchange = () => {
-  let v = 0; [4, 3, 2].forEach(k => { if ($('i502-' + k).checked) v |= 1 << k; }); post({write: {502: v}});
-});
-$('i504-0').onchange = e => post({write: {504: (S.auto_off & ~1) | (e.target.checked ? 1 : 0)}});
 $('b-write').onclick = () => post({write: {[$('w-reg').value]: +$('w-val').value}});
 
 async function poll() {

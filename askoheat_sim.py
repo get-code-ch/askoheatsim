@@ -14,6 +14,9 @@ Variables d'environnement :
   HTTP_PORT     port de l'interface web  (défaut 8080)
   TANK_LITERS   volume du chauffe-eau    (défaut 300)
   START_TEMP    température initiale °C  (défaut 45)
+  INPUT_SETTING registre 502, entrées autorisées (défaut 0b11100 : étage, consigne, injection)
+  AUTO_OFF      registre 504, arrêt automatique  (défaut 0b01 : arrêt après 60 s sans écriture)
+  COMPENSATE    ajoute la charge simulée à la valeur d'injection reçue (défaut true)
 """
 
 import asyncio
@@ -32,6 +35,11 @@ MODBUS_PORT = int(os.environ.get("MODBUS_PORT", "5020"))
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8080"))
 TANK_LITERS = float(os.environ.get("TANK_LITERS", "300"))
 START_TEMP = float(os.environ.get("START_TEMP", "45"))
+# Configuration fixée au déploiement (non modifiable depuis l'interface web).
+# Accepte le décimal, 0b… ou 0x…
+INPUT_SETTING = int(os.environ.get("INPUT_SETTING", "0b11100"), 0) & 0xFFFF
+AUTO_OFF = int(os.environ.get("AUTO_OFF", "0b01"), 0) & 0x3
+COMPENSATE = os.environ.get("COMPENSATE", "true").strip().lower() in ("1", "true", "yes", "oui", "on")
 
 # 3 résistances, pondération binaire -> 7 étages réguliers de 500 W (3.5 kW)
 HEATER_W = (500, 1000, 2000)
@@ -77,8 +85,8 @@ class Simulator:
         self.feedin_active = False       # 202 écrit depuis le dernier effacement
         self.last_cmd_write = None       # temps réel (monotonic)
         # Configuration
-        self.input_setting = 0b11100     # 502 : bit2 injection, bit3 consigne, bit4 étage
-        self.auto_off = 0b01             # 504 : bit0 arrêt après 60 s, bit1 redémarrage
+        self.input_setting = INPUT_SETTING  # 502 : bit2 injection, bit3 consigne, bit4 étage
+        self.auto_off = AUTO_OFF         # 504 : bit0 arrêt après 60 s, bit1 redémarrage
         self.auto_off_24h = 24           # 503 (heures, 0 = désactivé)
         self.legio_temp = 60             # 510
         self.thermostat_max = 65.0       # thermostat interne (réglage mécanique)
@@ -86,7 +94,7 @@ class Simulator:
         self.emergency_until = None      # temps simulé
         self.hp_request = False
         self.hp_power_w = 3500
-        self.compensate = True           # ajoute la charge simulée à la valeur d'injection
+        self.compensate = COMPENSATE     # ajoute la charge simulée à la valeur d'injection
         # Modèle thermique
         self.tank_l = TANK_LITERS
         self.t_low = START_TEMP          # sonde 0, dans la bride (bas)
@@ -312,8 +320,6 @@ class Simulator:
             self.t_cold = max(2.0, min(25.0, float(d["t_cold"])))
         if "speed" in d:
             self.speed = max(0.1, min(3600.0, float(d["speed"])))
-        if "compensate" in d:
-            self.compensate = bool(d["compensate"])
         if "thermostat_max" in d:
             self.thermostat_max = max(40.0, min(85.0, float(d["thermostat_max"])))
         if "hp_request" in d:
@@ -332,9 +338,12 @@ class Simulator:
             self.t_low = self.t_up = t
             self.event(f"Températures réinitialisées à {t:.0f} °C", "web")
         if "write" in d:
+            # Depuis l'interface web : seulement les commandes 200-202.
+            # La configuration (502, 504…) est fixée au déploiement.
             for a, v in d["write"].items():
-                if not self.write_reg(int(a), u16(int(v)), "web"):
-                    self.event(f"Refus : reg. {a} non inscriptible", "web")
+                if int(a) not in (REG_STEP, REG_SETPOINT, REG_FEEDIN) \
+                        or not self.write_reg(int(a), u16(int(v)), "web"):
+                    self.event(f"Refus : reg. {a} non modifiable depuis l'interface", "web")
 
     def state(self) -> dict:
         wd = None

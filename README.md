@@ -21,6 +21,22 @@ le pod redémarre).
 
 En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le port 5020).
 
+## Configuration
+
+Les réglages de l'appareil sont fixés au déploiement, par les variables d'environnement de
+`k8s/deployment.yaml`. L'interface web les affiche sans permettre de les modifier.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `INPUT_SETTING` | `0b11100` | registre 502 : bit 4 étage (200), bit 3 consigne (201), bit 2 injection (202) |
+| `AUTO_OFF` | `0b01` | registre 504 : bit 0 arrêt après 60 s sans écriture, bit 1 redémarrage auto |
+| `COMPENSATE` | `true` | ajoute la charge simulée à la valeur d'injection reçue (cas d'un vrai compteur) |
+| `TANK_LITERS` | `300` | volume du chauffe-eau |
+| `START_TEMP` | `45` | température de l'eau au démarrage |
+
+Home Assistant peut toujours écrire les registres 502 et 504 en Modbus, comme sur l'appareil réel.
+Ces écritures sont perdues au redémarrage du pod.
+
 ## Home Assistant
 
 `home-assistant/askoheat.yaml` est un package HA : capteurs (températures, puissance, état) et automation
