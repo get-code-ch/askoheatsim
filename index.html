@@ -65,7 +65,8 @@ button, select, input[type=number] { font: inherit; padding: 6px 10px; border-ra
 button { cursor: pointer; } button:hover { border-color: var(--text-secondary); }
 button.primary { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
 input[type=number] { width: 100px; }
-.check input:disabled { opacity: 1; cursor: default; }
+.check:has(input:disabled) { color: var(--text-secondary); cursor: not-allowed; }
+.check input:disabled { opacity: .5; cursor: not-allowed; }
 .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; color: var(--text-primary); font-size: 13px; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
 td, th { padding: 4px 6px; border-bottom: 1px solid var(--grid); text-align: left; }
