@@ -342,7 +342,10 @@ function render() {
 // ------------------------------------------------------------------ graphiques
 const charts = {};
 function drawChart(id, series, unit, stepped) {
-  const cv = $(id), H = +cv.getAttribute('height');
+  const cv = $(id);
+  // hauteur logique lue une seule fois : cv.height (en pixels physiques) écrase l'attribut
+  if (!cv.dataset.h) cv.dataset.h = cv.getAttribute('height');
+  const H = +cv.dataset.h;
   const W = cv.clientWidth, dpr = window.devicePixelRatio || 1;
   cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
   const g = cv.getContext('2d'); g.scale(dpr, dpr);
