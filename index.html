@@ -89,6 +89,12 @@ nav.tabs button:hover { border-color: var(--border); }
 .dbody { padding-bottom: 12px; }
 @media (min-width: 1500px) { body.drawer-open .simdash { margin-right: 400px; } }
 @media (max-width: 1000px) { .dash { grid-template-columns: 1fr; } .kpi-actions { margin-left: 0; } }
+/* Téléphone : rien ne dépasse en largeur, pas de zoom d'iOS sur les champs (police < 16 px) */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (max-width: 600px) {
+  .kpi-actions { flex-wrap: wrap; width: 100%; }
+  .kpi-actions > * { flex: 1 1 auto; }
+}
 @media (max-width: 600px) { .simdash { padding: 12px; } .kpis { gap: 6px 14px; } .kpi b { font-size: 17px; } .kv2 { grid-template-columns: auto 1fr; } }
 .regs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .regs > div { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px solid var(--grid); min-width: 0; }
@@ -197,11 +203,12 @@ canvas { width: 100%; display: block; }
 .trace details summary { cursor: pointer; color: var(--series-1); font-size: 12px; }
 
 /* --------------------------------------------------------------- config */
+.cfg table { display: block; max-width: 100%; overflow-x: auto; }
 .cfg { display: grid; grid-template-columns: minmax(0, 1fr) 380px minmax(0, 560px); gap: 16px; padding: 16px 24px 32px; align-items: start; }
 .cfg.noyaml { grid-template-columns: minmax(0, 1fr) 400px; }
 .cfg.noyaml #cfg-yamlcol { display: none; }
 @media (max-width: 1450px) { .cfg { grid-template-columns: minmax(0, 1fr) 380px; } #cfg-yamlcol { grid-column: 1 / -1; position: static; } }
-@media (max-width: 900px) { .cfg, .cfg.noyaml { grid-template-columns: 1fr; } .cfg .sticky { position: static; } }
+@media (max-width: 900px) { .cfg, .cfg.noyaml { grid-template-columns: minmax(0, 1fr); padding: 12px; } .cfg .sticky { position: static; } }
 .opt { border: 1px solid var(--border); border-radius: 10px; padding: 0; margin-bottom: 10px; background: var(--surface-1); }
 .opt > summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .opt > summary::-webkit-details-marker { display: none; }
@@ -229,6 +236,9 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
 .cfg-form label { margin-top: 8px; }
 .cfg-form select, .cfg-form input[type=text], .cfg-form input[type=number] { width: 100%; }
 .matrix td, .matrix th { font-size: 12.5px; }
+/* iOS zoome sur un champ dont la police fait moins de 16 px et la page reste décalée : 16 px sur téléphone
+   (en fin de feuille, après « font: inherit ») */
+@media (max-width: 600px) { select, textarea, input[type=number], input[type=text], input[type=datetime-local] { font-size: 16px; } }
 </style>
 </head>
 <body>
