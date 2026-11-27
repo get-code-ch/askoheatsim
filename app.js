@@ -37,6 +37,10 @@ const REG_DESC = {
   502: 'Entrées autorisées', 503: 'Arrêt après N min de chauffe', 504: 'Arrêt auto', 510: 'Temp. légionelles',
   595: 'Température minimale, °C', 626: 'Entrée qui pilote', 632: 'État des sondes', 639: 'Étage demandé par le 0-10 V'
 };
+// libellés courts pour la grille compacte (description complète au survol)
+const REG_SHORT = {316: 'État', 317: 'Puissance W', 318: 'Étage', 319: 'Consigne W', 320: 'Injection W', 321: 'Secours',
+  322: 'Contact PAC', 502: 'Entrées', 503: 'Arrêt min', 504: 'Arrêt auto', 510: 'Légio °C', 595: 'Temp. min °C',
+  626: 'Entrée active', 632: 'Sondes', 639: 'Étage 0-10 V'};
 const s16 = v => v & 0x8000 ? v - 0x10000 : v;
 const bin = (v, n) => '0b' + v.toString(2).padStart(n, '0');
 
@@ -142,9 +146,12 @@ function render() {
 // Registres et journal : onglet Échanges Modbus
 function renderLog() {
   $('regs').innerHTML = Object.entries(S.registers).map(([a, v]) => {
-    let shown = [319, 320].includes(+a) ? s16(v) : v;
-    if ([316, 502, 504, 626, 632].includes(+a)) shown = bin(v, [316, 502].includes(+a) ? 16 : 8);
-    return `<tr><td>${a}</td><td class="muted">${REG_DESC[a] || ''}</td><td class="num"><code>${shown}</code></td></tr>`;
+    let shown = [319, 320].includes(+a) ? s16(v) : v, tip = REG_DESC[a] || '';
+    if ([316, 502, 504, 626, 632].includes(+a)) {          // flags : hexadécimal, binaire au survol
+      shown = '0x' + v.toString(16).toUpperCase().padStart([316, 502].includes(+a) ? 4 : 2, '0');
+      tip += ' : ' + bin(v, [316, 502].includes(+a) ? 16 : 8);
+    }
+    return `<div title="${tip}"><span class="ra">${a}</span><span class="rd">${REG_SHORT[a] || REG_DESC[a] || ''}</span><code>${shown}</code></div>`;
   }).join('');
   $('events').innerHTML = S.events.map(e => `<div><span class="muted">${e.t}</span> <span class="src">${esc(e.src)}</span> ${esc(e.msg)}</div>`).join('');
 }

@@ -53,15 +53,17 @@ nav.tabs button:hover { border-color: var(--border); }
 .kpi-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 .kpi-notes { font-size: 12px; color: var(--text-secondary); margin: -4px 4px 0; min-height: 16px; }
 .dash { display: grid; grid-template-columns: 220px minmax(0, 1fr) 330px; gap: 12px; align-items: start; }
-.journee { display: flex; flex-direction: column; }
+.journee { display: flex; flex-direction: column; align-self: stretch; contain: size; }
+.regcard { grid-column: 1 / -1; padding: 10px 16px 12px; }
+.regcard h2 { margin-bottom: 6px; }
 .journee .seg { display: flex; }
 .journee .seg button { flex: 1; padding: 5px 6px; font-size: 12px; }
-.journee .jpane { max-height: calc(100vh - 330px); min-height: 200px; }
+.journee .jpane { flex: 1 1 0; min-height: 0; max-height: none; }
 .journee .kv2 { grid-template-columns: auto 1fr; }
 .pilot .hero { font-size: 30px; }
 .pilot .relays { margin-top: 6px; } .pilot .relay { padding: 3px 6px; }
 .pilot .steps { margin: 8px 0 4px; }
-@media (max-width: 1300px) { .dash { grid-template-columns: 220px minmax(0, 1fr); } .journee { grid-column: 1 / -1; } .journee .jpane { max-height: 260px; } }
+@media (max-width: 1300px) { .dash { grid-template-columns: 220px minmax(0, 1fr); } .journee { grid-column: 1 / -1; contain: none; } .journee .jpane { flex: none; max-height: 260px; } .regcard { grid-column: 1 / -1; } }
 .dash .col { gap: 12px; }
 .tankcard .tank-svg { max-width: 150px; }
 .tankcard .kv { font-size: 12.5px; }
@@ -88,6 +90,11 @@ nav.tabs button:hover { border-color: var(--border); }
 @media (min-width: 1500px) { body.drawer-open .simdash { margin-right: 400px; } }
 @media (max-width: 1000px) { .dash { grid-template-columns: 1fr; } .kpi-actions { margin-left: 0; } }
 @media (max-width: 600px) { .simdash { padding: 12px; } .kpis { gap: 6px 14px; } .kpi b { font-size: 17px; } .kv2 { grid-template-columns: auto 1fr; } }
+.regs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.regs > div { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; border-bottom: 1px solid var(--grid); min-width: 0; }
+.regs .ra { min-width: 30px; color: var(--text-secondary); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+.regs .rd { color: var(--text-secondary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.regs code { white-space: nowrap; }
 .logs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 @media (max-width: 1000px) { .logs { grid-template-columns: 1fr; } }
 .detail-card .decode-box { max-height: 220px; overflow: auto; }
@@ -337,7 +344,7 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
             <span style="--c:var(--series-4)">Maison</span><span style="--c:var(--series-5)">Réseau</span>
           </div>
         </div>
-        <div class="chart-wrap" style="margin-top:8px"><canvas id="ch-main" height="270"></canvas><div class="tip" id="tip-ch-main"></div></div>
+        <div class="chart-wrap" style="margin-top:8px"><canvas id="ch-main" height="200"></canvas><div class="tip" id="tip-ch-main"></div></div>
         <div class="note" id="g-loads"></div>
       </section>
     </div>
@@ -354,6 +361,10 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
     <div class="jpane" data-jpane="today" hidden><dl class="kv kv2" id="today"></dl></div>
     <div class="jpane" data-jpane="days" hidden><table id="days"></table></div>
   </section>
+    <section class="card regcard">
+      <h2>Registres principaux <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">· survol : description et valeur binaire</span></h2>
+      <div class="regs" id="regs"></div>
+    </section>
   </div>
 
 </div>
@@ -511,12 +522,7 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
         <tbody id="t-body"></tbody></table>
     </div>
   </div>
-  <div class="logs">
-    <section class="card">
-      <h2>Registres principaux</h2>
-      <table><thead><tr><th>Adresse</th><th>Description</th><th class="num">Valeur</th></tr></thead>
-        <tbody id="regs"></tbody></table>
-    </section>
+  <div>
     <section class="card">
       <h2>Journal du simulateur</h2>
       <div class="events" id="events"></div>
