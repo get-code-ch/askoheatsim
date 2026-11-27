@@ -100,6 +100,7 @@
   ];
 
   const DEFAULTS = {
+    link: 'integration', prefix: 'askoheat',
     mode: 'feedin', target: 'real', host: 'askoheat.local', simhost: 'askoheatsim.askoheatsim.svc.cluster.local',
     meter: 'two', imp: 'sensor.gplug_puissance_soutiree', exp: 'sensor.gplug_puissance_injectee',
     signed: 'sensor.puissance_reseau', unit: 'W', interval: 10, watchdog: true, restart: true,
@@ -129,6 +130,14 @@
       (la documentation précise seulement que secours et contact PAC passent avant le registre 200, et que le 0-10 V l'emporte sur le 200).
       Le générateur utilise le <b>bloc gestionnaire d'énergie 300-336</b> : état, puissance, températures et commandes au même endroit,
       les registres 318-320 étant identiques à 200-202. Cliquez une voie pour voir le détail ; celle choisie dans le générateur s'ouvre seule.</p>
+      <p>Deux façons de relier Home Assistant à l'appareil, au choix dans le générateur :</p>
+      <ul style="margin-top:0;padding-left:18px">
+        <li><b>Intégration Askoheat+</b> (HACS, toggm/askoheat) : elle lit tous les blocs et expose chaque réglage comme entité ;
+            la voie injection est intégrée (« Auto feed-in »). Le package ne contient que la régulation, et le générateur liste
+            les entités à régler dans l'intégration.</li>
+        <li><b>Modbus YAML</b> : le package déclare lui-même la connexion (hub « askoheat »), les capteurs et les écritures de registres.
+            À n'utiliser que sans l'intégration, pour ne pas avoir deux clients et des entités en double.</li>
+      </ul>
       <table class="matrix"><thead><tr><th></th><th>Injection</th><th>Consigne</th><th>Étage</th><th>0-10 V</th></tr></thead>
       <tbody>${MATRIX.map(r => `<tr><th>${r[0]}</th>${r.slice(1).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>
     </section>
@@ -168,13 +177,22 @@
         <button data-yaml="copy">Copier</button>
         <button data-yaml="download">Télécharger</button>
       </div>
+      <label>Connexion à l'ASKOHEAT+</label><select data-c="link">
+        ${opt('integration', 'intégration Askoheat+ (HACS, toggm/askoheat)')}${opt('modbus', 'Modbus YAML (hub « askoheat » dans le package)')}</select>
+      <div data-show="integration">
+        <label>Préfixe des entités de l'intégration</label><input type="text" data-c="prefix">
+        <div class="note">Les entités s'appellent <code>switch.&lt;préfixe&gt;_…</code>, <code>number.&lt;préfixe&gt;_…</code> (défaut : <code>askoheat</code>).
+        L'adresse de l'appareil se règle dans l'intégration.</div>
+      </div>
       <div class="grid2">
         <div><label>Voie de pilotage</label><select data-c="mode">
           ${opt('feedin', '320 injection')}${opt('setpoint', '319 consigne')}${opt('step', '318 étage')}${opt('analog', '0-10 V (Shelly)')}</select></div>
         <div><label>Cible</label><select data-c="target">${opt('real', 'appareil réel')}${opt('sim', 'ce simulateur')}</select></div>
       </div>
+      <div data-show="modbus">
       <label>Adresse de l'ASKOHEAT+</label><input type="text" data-c="host">
       <label>Adresse du simulateur (Modbus TCP, port 502)</label><input type="text" data-c="simhost">
+      </div>
       <div data-show="meter">
         <label>Mesure au compteur</label><select data-c="meter">${opt('two', 'deux capteurs : soutirage et injection')}${opt('one', 'un capteur signé (+ soutirage, − injection)')}</select>
         <div class="grid2" data-show="two">
@@ -192,8 +210,9 @@
         <div><label>Puissance minimale (W)</label><input type="number" data-c="minimum" min="0" max="3500" step="50"></div>
       </div>
       <div data-show="analog"><label>Entité du module 0-10 V</label><input type="text" data-c="light"></div>
-      <label class="check"><input type="checkbox" data-c="writecfg"> Écrire la configuration (502, 503, 504, 595) au démarrage de HA</label>
-      <div data-show="writecfg">
+      <label class="check" data-show="modbus"><input type="checkbox" data-c="writecfg"> Écrire la configuration (502, 503, 504, 595) au démarrage de HA</label>
+      <div data-show="cfgopts">
+        <div class="note" data-show="integration" style="margin-top:8px">Réglages de l'appareil (listés plus bas avec leurs entités) :</div>
         <label class="check"><input type="checkbox" data-c="watchdog"> 504 bit 0 · arrêt après 60 s sans écriture</label>
         <label class="check"><input type="checkbox" data-c="restart"> 504 bit 1 · reprise automatique après une coupure</label>
         <label class="check"><input type="checkbox" data-c="hp"> 502 bit 6 · contact PAC autorisé</label>
@@ -237,6 +256,7 @@
   }
 
   function yaml() {
+    if (C.link === 'integration') return yamlIntegration();
     const host = C.target === 'sim' ? C.simhost : C.host;
     const {r502, r504} = registers();
     const L = [];
@@ -447,6 +467,205 @@
     return L.join('\n') + '\n';
   }
 
+
+  // ================================================ cible : intégration Askoheat+ (HACS)
+  // Entités créées par l'intégration toggm/askoheat : <domaine>.<préfixe>_<clé>.
+  const E = (dom, key) => `${dom}.${(C.prefix || 'askoheat').trim()}_${key}`;
+  // entités désactivées par défaut dans l'intégration (à activer avant usage)
+  const OFF_BY_DEFAULT = new Set(['load_setpoint', 'load_setpoint_value_enabled', 'auto_off_modbus_timeout_enabled',
+                                  'restart_if_em_connection_lost']);
+
+  // Réglages à faire dans l'intégration : [entité, valeur, remarque, désactivée par défaut]
+  function checklist() {
+    const rows = [];
+    // une entité désactivée par défaut n'est à activer que si on s'en sert (valeur « on »)
+    const sw = (key, on, note = '') => rows.push([E('switch', key), on ? 'on' : 'off', note, on && OFF_BY_DEFAULT.has(key)]);
+    const nb = (key, v, note = '') => rows.push([E('number', key), String(v), note, OFF_BY_DEFAULT.has(key)]);
+    sw('load_feedin_value_enabled', C.mode === 'feedin', 'Load feed-in mode (502 bit 2)');
+    sw('load_setpoint_value_enabled', C.mode === 'setpoint', 'Load set-point mode (502 bit 3)');
+    sw('set_heater_step_value_enabled', C.mode === 'step', 'Set heater step mode (502 bit 4)');
+    if (C.mode === 'analog') sw('analog_input_enabled', true, '0-10 V (502 bit 5) – unité « Analog input control » à cocher dans les options');
+    sw('auto_feedin', C.mode === 'feedin', C.mode === 'feedin' ? 'Auto feed-in : l\'intégration écrit elle-même le 320' : 'Auto feed-in : n\'écrit plus le 320');
+    if (C.mode === 'feedin') nb('auto_feedin_buffer', C.reserve, 'réserve d\'injection (W)');
+    if (C.mode === 'setpoint') rows.push([E('number', 'load_setpoint'), '(écrit par le package)', 'consigne 319', true]);
+    sw('auto_off_modbus_timeout_enabled', C.watchdog, 'arrêt après 60 s sans écriture (504 bit 0)');
+    sw('restart_if_em_connection_lost', C.watchdog && C.restart, 'reprise automatique (504 bit 1)');
+    if (C.hp) sw('heatpump_request_enabled', true, 'contact PAC (502 bit 6) – unité « Heatpump control » à cocher dans les options');
+    sw('emergency_mode_enabled', C.emerg, 'bouton secours (502 bit 7)');
+    sw('hold_minimal_temperature_enabled', C.mintemp, 'température minimale (502 bit 9)');
+    if (C.mintemp) nb('minimal_temperature', C.mintempv, '°C (595)');
+    nb('auto_heater_off_minutes', C.offmin, 'arrêt après N min de chauffe continue (503)');
+    return rows;
+  }
+
+  // L'auto-feed-in attend un seul capteur signé en W ; sinon le package crée sensor.askoheat_reseau.
+  function needGridTemplate() { return !(C.meter === 'one' && C.unit === 'W'); }
+  function gridEntity() { return needGridTemplate() ? 'sensor.askoheat_reseau' : C.signed; }
+
+  function yamlIntegration() {
+    const L = [];
+    const voie = OPTIONS.find(o => o.id === C.mode).title;
+    L.push(`# ASKOHEAT+ 2.0 – package Home Assistant généré par le simulateur (${new Date().toLocaleDateString('fr-CH')})`);
+    L.push(`# Voie : ${voie}`);
+    L.push(`# Connexion : intégration Askoheat+ (HACS, toggm/askoheat), préfixe « ${C.prefix || 'askoheat'} »`);
+    L.push(`# Cible : ${C.target === 'sim' ? 'simulateur' : 'appareil réel'}`);
+    L.push('#');
+    L.push('# Réglages à faire dans l\'intégration (Paramètres → Appareils et services → Askoheat+) :');
+    checklist().forEach(([e, v, n, off]) => L.push(`#   ${e} : ${v}${off ? ' (entité désactivée par défaut : l\'activer)' : ''}${n ? ' – ' + n : ''}`));
+    if (C.mode === 'feedin') {
+      L.push(`#   options de l'intégration (Reconfigurer) : capteur de puissance = ${gridEntity()}, inverser = non`);
+      L.push('#');
+      L.push('# Voie 320 : l\'intégration envoie elle-même la mesure (Auto feed-in). Ce package ne contient que');
+      L.push(needGridTemplate() ? '# le capteur de mesure au compteur, en W et signé, attendu par l\'intégration.' : '# des commentaires : votre capteur convient tel quel.');
+      if (C.target === 'sim') L.push('# Simulateur en mode « Piloté par HA » : c\'est lui qui ajoute sa charge. N\'ajoutez rien à la mesure.');
+    }
+    L.push('');
+
+    const sensors = [];
+    if (needGridTemplate() && C.mode !== 'step') {
+      sensors.push(
+        `      - name: ${q('Askoheat réseau')}`,
+        '        unique_id: askoheat_reseau',
+        '        unit_of_measurement: W',
+        '        device_class: power',
+        '        state_class: measurement',
+        `        state: ${q(`{{ (${gridExpr()}) | round(0) | int }}`)}`,
+        `        availability: ${q(`{{ ${gridAvail()} }}`)}`);
+    }
+    const load = E('sensor', 'heater_load');
+    // Avec le simulateur, le vrai compteur ne voit pas la charge simulée (le simulateur ne compense qu'en mode injection)
+    // (en 0-10 V, le Shelly ne pilote pas le simulateur : rien à ajouter)
+    const grid = C.target === 'sim' && C.mode === 'setpoint'
+      ? `(states('${gridEntity()}') | float(0)) + (states('${load}') | float(0))`
+      : `(states('${gridEntity()}') | float(0))`;
+    if (C.mode === 'setpoint' || C.mode === 'analog') {
+      const cur = C.mode === 'setpoint' ? `states('${load}') | float(0)`
+        : `(state_attr('${C.light}', 'brightness') | int(0)) / 255 * 3500 if is_state('${C.light}', 'on') else 0`;
+      sensors.push(
+        `      - name: ${q('Askoheat consigne calculée')}`,
+        '        unique_id: askoheat_consigne_calculee',
+        '        unit_of_measurement: W',
+        '        device_class: power',
+        '        state_class: measurement',
+        '        state: >',
+        `          {% set current = ${cur} %}`,
+        `          {% set grid = ${grid} %}`,
+        "          {% set reserve = states('input_number.askoheat_reserve') | float(0) %}",
+        "          {% set minimum = states('input_number.askoheat_minimum') | float(500) %}",
+        '          {% set target = [[current - grid - reserve, 0] | max, 3500] | min %}',
+        '          {{ (target | int) if target >= minimum else 0 }}',
+        `        availability: ${q(`{{ has_value('${gridEntity()}') and has_value('${load}') }}`)}`);
+    }
+
+    if (C.mode !== 'feedin') {
+      L.push('input_boolean:');
+      L.push('  askoheat_pv:');
+      L.push(`    name: ${q(C.mode === 'step' ? 'Askoheat – pilotage manuel' : 'Askoheat – chauffe sur surplus PV')}`);
+      L.push('    icon: mdi:water-boiler');
+      L.push('');
+      L.push('input_number:');
+      if (C.mode === 'step') {
+        L.push('  askoheat_etage:');
+        L.push(`    name: ${q('Askoheat – étage (× 500 W)')}`);
+        L.push('    min: 0\n    max: 7\n    step: 1\n    mode: slider');
+      } else {
+        L.push('  askoheat_reserve:');
+        L.push(`    name: ${q('Askoheat – réserve d\'injection')}`);
+        L.push('    min: 0\n    max: 2000\n    step: 50\n    unit_of_measurement: W\n    mode: box');
+        L.push('  askoheat_minimum:');
+        L.push(`    name: ${q('Askoheat – puissance minimale')}`);
+        L.push('    min: 500\n    max: 3500\n    step: 500\n    unit_of_measurement: W\n    mode: box');
+      }
+      L.push('');
+    }
+    if (sensors.length) {
+      L.push('template:');
+      L.push('  - sensor:');
+      sensors.forEach(l => L.push(l));
+      L.push('');
+    }
+    if (C.mode === 'feedin') return L.join('\n') + '\n';
+
+    L.push('automation:');
+    const head = (id, alias) => { L.push(`  - id: ${id}`); L.push(`    alias: ${q(alias)}`); };
+    const every = () => {
+      L.push('    mode: single');
+      L.push('    max_exceeded: silent');
+      L.push('    triggers:');
+      L.push('      - trigger: time_pattern');
+      L.push(`        seconds: ${q('/' + C.interval)}`);
+      L.push('    conditions:');
+      L.push('      - condition: state\n        entity_id: input_boolean.askoheat_pv\n        state: "on"');
+    };
+    const offTrigger = () => L.push('    triggers:\n      - trigger: state\n        entity_id: input_boolean.askoheat_pv\n        to: "off"');
+    const setNum = (ent, v) => {
+      L.push('      - action: number.set_value');
+      L.push('        target:');
+      L.push(`          entity_id: ${ent}`);
+      L.push('        data:');
+      L.push(`          value: ${v}`);
+    };
+    if (C.mode === 'setpoint') {
+      const sp = E('number', 'load_setpoint');
+      head('askoheat_consigne', 'ASKOHEAT – consigne sur le surplus PV (319)');
+      every();
+      L.push(`      - condition: template\n        value_template: ${q(`{{ has_value('sensor.askoheat_consigne_calculee') and has_value('${sp}') }}`)}`);
+      L.push('    actions:');
+      L.push('      # l\'intégration accepte 250-30000 W : 250 W (sous le premier étage de 500 W) = arrêt');
+      setNum(sp, q("{{ [states('sensor.askoheat_consigne_calculee') | int(0), 250] | max }}"));
+      head('askoheat_consigne_arret', 'ASKOHEAT – arrêt de la consigne');
+      offTrigger();
+      L.push('    actions:');
+      setNum(sp, '250');
+    }
+    if (C.mode === 'step') {
+      const st = E('number', 'set_heater_step');
+      head('askoheat_etage', 'ASKOHEAT – étage manuel (318)');
+      every();
+      L.push('    actions:');
+      setNum(st, q("{{ states('input_number.askoheat_etage') | int(0) }}"));
+      head('askoheat_etage_arret', 'ASKOHEAT – arrêt du pilotage manuel');
+      offTrigger();
+      L.push('    actions:');
+      setNum(st, '0');
+    }
+    if (C.mode === 'analog') {
+      head('askoheat_regulation_0_10v', 'ASKOHEAT – consigne 0-10 V sur le surplus');
+      every();
+      L.push(`      - condition: template\n        value_template: ${q("{{ has_value('sensor.askoheat_consigne_calculee') }}")}`);
+      L.push('    actions:');
+      L.push('      - choose:');
+      L.push(`          - conditions: ${q("{{ states('sensor.askoheat_consigne_calculee') | int(0) == 0 }}")}`);
+      L.push('            sequence:');
+      L.push('              - action: light.turn_off');
+      L.push(`                target:\n                  entity_id: ${C.light}`);
+      L.push('        default:');
+      L.push('          - action: light.turn_on');
+      L.push(`            target:\n              entity_id: ${C.light}`);
+      L.push('            data:');
+      L.push(`              brightness_pct: ${q("{{ [(states('sensor.askoheat_consigne_calculee') | int(0) / 3500 * 100) | round(0) | int, 1] | max }}")}`);
+      head('askoheat_regulation_0_10v_arret', 'ASKOHEAT – arrêt du pilotage 0-10 V');
+      offTrigger();
+      L.push(`    actions:\n      - action: light.turn_off\n        target:\n          entity_id: ${C.light}`);
+    }
+    if (C.mode !== 'step') {
+      head('askoheat_compteur_perdu', 'ASKOHEAT – arrêt si le compteur ne répond plus');
+      L.push(`    triggers:\n      - trigger: state\n        entity_id: ${gridEntity()}\n        to: [unavailable, unknown]\n        for:\n          minutes: 1`);
+      L.push('    conditions:\n      - condition: state\n        entity_id: input_boolean.askoheat_pv\n        state: "on"');
+      L.push('    actions:\n      - action: input_boolean.turn_off\n        target:\n          entity_id: input_boolean.askoheat_pv');
+    }
+    return L.join('\n') + '\n';
+  }
+
+  function checklistHtml() {
+    const rows = checklist().map(([e, v, n, off]) =>
+      `<tr><td><code>${e}</code>${off ? ' <span class="warn" title="désactivée par défaut dans l\'intégration">· à activer</span>' : ''}</td><td><b>${v}</b></td><td class="muted">${n}</td></tr>`).join('');
+    const extra = C.mode === 'feedin'
+      ? `<tr><td>Options de l'intégration (Reconfigurer)</td><td><b><code>${gridEntity()}</code></b></td><td class="muted">capteur de puissance, « inverser » décoché</td></tr>` : '';
+    return `<b>Réglages dans l'intégration Askoheat+</b>
+      <table style="margin-top:4px"><thead><tr><th>Entité</th><th>Valeur</th><th></th></tr></thead><tbody>${rows}${extra}</tbody></table>`;
+  }
+
   function warnings() {
     const w = [];
     const {r502, r504} = registers();
@@ -455,21 +674,33 @@
     if (C.mode !== 'analog' && !C.watchdog)
       w.push('warn', 'Sans watchdog (504 bit 0), la dernière commande reste active si HA s\'arrête. Le thermostat reste la seule limite.');
     if (C.interval < 2) w.push('warn', 'L\'appareil met ses valeurs à jour chaque seconde ; écrire plus vite charge le réseau sans gain.');
-    if (C.target === 'sim' && C.mode === 'feedin')
+    if (C.link === 'integration') {
+      if (C.mode === 'feedin')
+        w.push('ok', `Voie 320 avec l'intégration : son « Auto feed-in » écrit la mesure toutes les 10 s. Le package ${needGridTemplate() ? 'ne fournit que le capteur <code>sensor.askoheat_reseau</code> (W, signé) à choisir dans ses options' : 'est vide : votre capteur convient tel quel'}.`);
+      if (C.target === 'sim' && C.mode === 'feedin')
+        w.push('ok', 'Simulateur : mode « Piloté par HA ». Il ajoute lui-même sa charge à la mesure : donnez à l\'intégration la mesure brute du compteur, sans y ajouter la puissance des résistances.');
+      if (C.target === 'sim' && C.mode === 'setpoint')
+        w.push('ok', 'Simulateur : en mode consigne il ne compense pas ; le package ajoute la puissance simulée (heater load) à la mesure. Avec l\'appareil réel, choisissez la cible « appareil réel ».');
+      if (C.mode === 'analog' && C.target === 'sim')
+        w.push('warn', 'Le simulateur n\'a pas de Shelly : son entrée 0-10 V se règle avec le curseur. Le package sert à tester la logique avec le vrai module.');
+      if (C.hp || C.mode === 'analog')
+        w.push('warn', 'Les entités 0-10 V et contact PAC n\'existent que si les unités « Analog input control » / « Heatpump control » sont cochées dans les options de l\'intégration.');
+    }
+    if (C.link === 'modbus' && C.target === 'sim' && C.mode === 'feedin')
       w.push('ok', 'Simulateur + vrai compteur : mettez le simulateur en mode « Piloté par HA » (onglet Simulation). En mode autonome, son port Modbus est fermé et ces entités sont indisponibles.');
-    if (C.target === 'sim' && C.mode === 'setpoint')
+    if (C.link === 'modbus' && C.target === 'sim' && C.mode === 'setpoint')
       w.push('ok', 'Simulateur + vrai compteur : le package ajoute la puissance simulée à la mesure (le compteur ne la voit pas). Retirez cet ajout pour l\'appareil réel en choisissant la cible « appareil réel ».');
-    if (C.target === 'sim' && C.mode === 'analog')
+    if (C.link === 'modbus' && C.target === 'sim' && C.mode === 'analog')
       w.push('warn', 'Le simulateur n\'a pas de Shelly : son entrée 0-10 V se règle avec le curseur de l\'onglet Simulation. Le package sert ici à tester la logique avec le vrai module.');
     if (C.mintemp) w.push('warn', `Température minimale à ${C.mintempv} °C : l'appareil chauffe aussi sur le réseau (la nuit, en hiver) pour la maintenir.`);
-    if (C.writecfg && C.target === 'real')
+    if (C.link === 'modbus' && C.writecfg && C.target === 'real')
       w.push('warn', 'Écrire 502/504 modifie la configuration de l\'appareil réel. Notez d\'abord les valeurs actuelles (page /expert ou /getall de l\'ASKOHEAT+). Vérifiez aussi que le firmware connaît la voie choisie (320 / 202 : 4.2.1 ou plus).');
     if (C.mode === 'analog')
       w.push('warn', 'Faites correspondre les seuils de l\'entrée 0-10 V (registres 556-589) à la sortie du module : par exemple 1,4 V par étage pour 0-10 V = 0-3,5 kW.');
     let html = '';
     for (let i = 0; i < w.length; i += 2) html += `<div class="warnbox" style="border-color:var(--${w[i] === 'ok' ? 'series-1' : w[i]})">${w[i + 1]}</div>`;
     $('cfg-warn').innerHTML = html;
-    $('cfg-regs').innerHTML = C.writecfg
+    $('cfg-regs').innerHTML = C.link === 'integration' ? checklistHtml() : C.writecfg
       ? `Configuration écrite au démarrage : <code>502 = ${r502} (0b${r502.toString(2).padStart(10, '0')})</code> · <code>503 = ${C.offmin}</code> · <code>504 = ${r504} (0b${r504.toString(2).padStart(2, '0')})</code>${C.mintemp ? ` · <code>595 = ${C.mintempv}</code>` : ''}`
       : '';
   }
@@ -482,12 +713,16 @@
     });
     const show = {
       meter: C.mode !== 'step', two: C.meter === 'two', one: C.meter === 'one',
-      reg: C.mode === 'setpoint' || C.mode === 'analog', analog: C.mode === 'analog',
+      reg: C.mode === 'setpoint' || C.mode === 'analog' || (C.link === 'integration' && C.mode === 'feedin'), analog: C.mode === 'analog',
       writecfg: C.writecfg, mintemp: C.mintemp,
+      integration: C.link === 'integration', modbus: C.link === 'modbus',
+      cfgopts: C.link === 'integration' || C.writecfg,
     };
     form.querySelectorAll('[data-show]').forEach(el => el.hidden = !show[el.dataset.show]);
     form.querySelector('[data-c="host"]').previousElementSibling.hidden = form.querySelector('[data-c="host"]').hidden = C.target !== 'real';
     form.querySelector('[data-c="simhost"]').previousElementSibling.hidden = form.querySelector('[data-c="simhost"]').hidden = C.target !== 'sim';
+    // en mode intégration + injection, seule la réserve compte (« Auto feed-in buffer » de l'intégration)
+    form.querySelector('[data-c="minimum"]').closest('div').hidden = C.link === 'integration' && C.mode === 'feedin';
     if (C.mode !== openedFor) {                      // la voie choisie s'ouvre, les autres se ferment
       OPTIONS.forEach(o => { const el = $('opt-' + o.id); el.open = o.id === C.mode; el.classList.toggle('chosen', o.id === C.mode); });
       openedFor = C.mode;

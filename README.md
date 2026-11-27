@@ -36,7 +36,9 @@ En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le
   affichées (« client A », « client B »…), car la page est publique.
 - **Configuration Home Assistant** : les voies de pilotage de l'ASKOHEAT+ (320 injection, 319 consigne, 318 étage,
   0-10 V via Shelly) en accordéon, avec avantages et inconvénients (la voie choisie s'ouvre seule), les fonctions
-  autonomes de l'appareil, un générateur de package HA (Afficher / Copier / Télécharger) et le YAML dans une colonne masquable. Le package utilise le
+  autonomes de l'appareil, un générateur de package HA (Afficher / Copier / Télécharger) et le YAML dans une colonne masquable.
+  Deux connexions au choix : **intégration Askoheat+** (HACS, toggm/askoheat ; le package passe par ses entités `number.*` et
+  le générateur liste les `switch.*` / `number.*` à régler, avec un préfixe d'entités modifiable) ou **Modbus YAML** (hub dans le package). Le package utilise le
   bloc gestionnaire d'énergie 300-336 (316 état, 317 puissance, 318-320 commandes, 325-334 sondes en float32).
   Basé sur la table Modbus Askoma v1.16 (13.05.2024).
 
