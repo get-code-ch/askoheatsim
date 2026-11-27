@@ -10,4 +10,8 @@ configMapGenerator:
   - name: askoheatsim-code
     files:
       - askoheat_sim.py
+      - household.py
       - index.html
+      - app.js
+      - trace.js
+      - config.js

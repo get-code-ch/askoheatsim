@@ -26,9 +26,14 @@ spec:
             - {name: TANK_LITERS, value: "300"}
             - {name: START_TEMP, value: "45"}
             # Configuration fixée au déploiement (affichée en lecture seule dans l'interface)
-            - {name: INPUT_SETTING, value: "0b11100"}   # reg. 502 : bit4 étage, bit3 consigne, bit2 injection
+            # reg. 502 : bits 2-7 injection, consigne, étage, 0-10 V, contact PAC, secours ; bit 9 température minimale
+            - {name: INPUT_SETTING, value: "0x2FC"}
+            - {name: MIN_TEMP, value: "45"}             # reg. 595 : température minimale maintenue (°C)
             - {name: AUTO_OFF, value: "0b01"}           # reg. 504 : bit0 arrêt après 60 s, bit1 redémarrage auto
-            - {name: COMPENSATE, value: "true"}         # ajoute la charge simulée à la valeur d'injection
+            # Valeur de départ de la case « compensation » (modifiable dans l'interface) :
+            # true = HA envoie la mesure du vrai compteur ; false = le simulateur simule la mesure et ignore 202
+            - {name: COMPENSATE, value: "true"}
+            - {name: TZ_NAME, value: "Europe/Zurich"}
             - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
             - {name: PYTHONUNBUFFERED, value: "1"}
           ports:

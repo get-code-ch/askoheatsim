@@ -6,8 +6,7 @@
 # puis copier ce fichier dans config/packages/askoheat.yaml.
 #
 # Pour passer au vrai appareil, il suffit de changer "host" (et "port: 502").
-# Remarque : selon la version de HA, la clé s'appelle "device_address"
-# (récent) ou "slave" (ancien). L'ASKOHEAT+ ignore l'identifiant d'unité.
+# L'identifiant d'unité est omis : l'ASKOHEAT+ l'ignore (et la clé change selon la version de HA).
 
 modbus:
   - name: askoheat
@@ -60,27 +59,30 @@ modbus:
 
 # ---------------------------------------------------------------------------
 # Automation : envoyer la puissance réseau toutes les 10 s (watchdog = 60 s).
-# gPlug : sensor.gplugd_pi_1_7 (soutirage) et sensor.gplugd_po_2_7 (injection), en kW.
+# gPlug (package gplug) : sensor.gplug_puissance_soutiree et sensor.gplug_puissance_injectee, en W.
 # Valeur envoyée = soutirage − injection, en W (négatif = surplus), convertie en
 # complément à deux (registre int16).
+# Avec le simulateur : laisser cochée la case « La mesure envoyée n'inclut pas le corps de
+# chauffe simulé ». Décochée, le simulateur ignore ces écritures et simule lui-même la mesure.
+# L'onglet « Configuration Home Assistant » du simulateur génère d'autres variantes (201, 200, 0-10 V).
 automation:
   - alias: "ASKOHEAT – envoyer la valeur d'injection"
     mode: single
+    max_exceeded: silent
     triggers:
       - trigger: time_pattern
         seconds: "/10"
     conditions:
       - condition: template
         value_template: >-
-          {{ states('sensor.gplugd_pi_1_7') | is_number
-             and states('sensor.gplugd_po_2_7') | is_number }}
+          {{ has_value('sensor.gplug_puissance_soutiree')
+             and has_value('sensor.gplug_puissance_injectee') }}
     actions:
       - action: modbus.write_register
         data:
           hub: askoheat
-          slave: 1
           address: 202
           value: >-
-            {% set p = ((states('sensor.gplugd_pi_1_7') | float
-                        - states('sensor.gplugd_po_2_7') | float) * 1000) | int %}
+            {% set p = (states('sensor.gplug_puissance_soutiree') | float(0)
+                        - states('sensor.gplug_puissance_injectee') | float(0)) | round(0) | int %}
             {{ ([[-30000, p] | max, 30000] | min) % 65536 }}

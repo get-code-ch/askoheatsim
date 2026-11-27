@@ -10,40 +10,51 @@
   color-scheme: light;
   --bg: #f4f3ef; --surface-1: #ffffff; --surface-2: #f7f6f2; --border: #e3e1da;
   --text-primary: #191919; --text-secondary: #666666; --grid: #ecebe6;
-  --series-1: #257de0; --series-2: #f47230;
+  --series-1: #257de0; --series-2: #f47230; --series-3: #d9a400; --series-4: #7a5bc7; --series-5: #2a9d6f;
   --hot: #e04a2f; --cold: #3b7fd9; --on: #f2a600; --off: #d9d7d0;
   --good: #008a17; --warn: #b26b00; --crit: #c8312f;
+  --rx: #1f6fc9; --rx-bg: #e8f1fc; --tx: #0b7d3a; --tx-bg: #e7f5ec; --ex-bg: #fbeaea; --web-bg: #f1efe8;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
     --bg: #111111; --surface-1: #191919; --surface-2: #202020; --border: #2e2e2e;
     --text-primary: #efefef; --text-secondary: #9c9c9c; --grid: #2a2a2a;
-    --series-1: #338ced; --series-2: #e76624;
+    --series-1: #338ced; --series-2: #e76624; --series-3: #e0b52a; --series-4: #9c82e0; --series-5: #3cbf8a;
     --on: #d28e05; --off: #3a3a3a; --good: #0aac23; --warn: #e0a030; --crit: #eb6263;
+    --rx: #6aaaf2; --rx-bg: #14243a; --tx: #4fcf83; --tx-bg: #102a1b; --ex-bg: #3a1717; --web-bg: #26241f;
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   background: var(--bg); color: var(--text-primary); }
-header { padding: 18px 24px 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+header { padding: 18px 24px 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
 header h1 { margin: 0; font-size: 20px; font-weight: 650; }
 header .sub { color: var(--text-secondary); }
-header .badges { margin-left: auto; display: flex; gap: 8px; }
+header .badges { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 .badge { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface-1); font-size: 12px; color: var(--text-secondary); }
 .badge b { color: var(--text-primary); }
-main { display: grid; gap: 16px; padding: 8px 24px 32px;
-  grid-template-columns: 260px minmax(0, 1fr) 340px; }
-@media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+nav.tabs { display: flex; gap: 4px; padding: 12px 24px 0; border-bottom: 1px solid var(--border); }
+nav.tabs button { border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0;
+  background: none; padding: 8px 16px; color: var(--text-secondary); font-weight: 550; margin-bottom: -1px; }
+nav.tabs button[aria-selected=true] { background: var(--bg); color: var(--text-primary); border-color: var(--border);
+  border-bottom: 1px solid var(--bg); }
+nav.tabs button:hover { border-color: var(--border); }
+.tab[hidden] { display: none !important; }
+main { display: grid; gap: 16px; padding: 16px 24px 32px;
+  grid-template-columns: 280px minmax(0, 1fr) 360px; }
+@media (max-width: 1150px) { main { grid-template-columns: 1fr; } }
 .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
 .card h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; text-transform: uppercase;
   letter-spacing: .04em; color: var(--text-secondary); }
+.card h3 { margin: 16px 0 6px; font-size: 14px; font-weight: 600; }
 .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .hero { font-size: 40px; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .hero small { font-size: 16px; color: var(--text-secondary); font-weight: 500; }
 .muted { color: var(--text-secondary); }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-variant-numeric: tabular-nums; margin: 0; }
 .kv dt { color: var(--text-secondary); } .kv dd { margin: 0; text-align: right; }
 .steps { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin: 12px 0 6px; }
 .steps div { height: 14px; background: var(--off); }
@@ -60,29 +71,91 @@ main { display: grid; gap: 16px; padding: 8px 24px 32px;
 label { display: block; margin: 10px 0 4px; color: var(--text-secondary); font-size: 12px; }
 input[type=range] { width: 100%; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-button, select, input[type=number] { font: inherit; padding: 6px 10px; border-radius: 8px;
+button, select, input[type=number], input[type=text], input[type=datetime-local] { font: inherit; padding: 6px 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); }
 button { cursor: pointer; } button:hover { border-color: var(--text-secondary); }
 button.primary { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+button.sel { border-color: var(--text-primary); font-weight: 600; }
 input[type=number] { width: 100px; }
 .check:has(input:disabled) { color: var(--text-secondary); cursor: not-allowed; }
 .check input:disabled { opacity: .5; cursor: not-allowed; }
-.check { display: flex; gap: 8px; align-items: center; margin: 6px 0; color: var(--text-primary); font-size: 13px; }
+.check { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; color: var(--text-primary); font-size: 13px; cursor: pointer; }
+.check input { margin-top: 3px; }
+.switch-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-top: 6px; background: var(--surface-2); }
+.switch-card.off { border-color: var(--series-4); }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
-td, th { padding: 4px 6px; border-bottom: 1px solid var(--grid); text-align: left; }
-th { color: var(--text-secondary); font-weight: 500; } td.num { text-align: right; }
+td, th { padding: 4px 6px; border-bottom: 1px solid var(--grid); text-align: left; vertical-align: top; }
+th { color: var(--text-secondary); font-weight: 500; } td.num, th.num { text-align: right; }
 .events { max-height: 260px; overflow: auto; font-size: 12.5px; }
 .events div { padding: 3px 0; border-bottom: 1px solid var(--grid); }
 .events .src { display: inline-block; min-width: 54px; color: var(--text-secondary); }
 .chart-wrap { position: relative; }
 canvas { width: 100%; display: block; }
-.legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
 .legend span::before { content: ""; display: inline-block; width: 12px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
 .tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 8px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
-  display: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  display: none; white-space: nowrap; font-variant-numeric: tabular-nums; z-index: 2; }
+.tank-svg { display: block; max-width: 240px; margin: 0 auto; }
 .tank-svg text { font: 600 13px system-ui, sans-serif; fill: #fff; }
 .note { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.grid2 label { margin-top: 8px; }
+.grid2 select, .grid2 input { width: 100%; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border); margin: 2px 4px 2px 0; }
+.pill.hot { border-color: var(--hot); color: var(--hot); }
+.sched { max-height: 220px; overflow: auto; }
+.sched tr.now td { background: color-mix(in srgb, var(--on) 18%, transparent); }
+.sched tr.past td { color: var(--text-secondary); }
+.flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; text-align: center; }
+.flow div { border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+.flow b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+.flow span { font-size: 11px; color: var(--text-secondary); }
+
+/* --------------------------------------------------------------- trace */
+.wide { padding: 16px 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+.toolbar { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; }
+.toolbar .check { margin: 0; }
+.trace-wrap { max-height: calc(100vh - 290px); min-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.trace { font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.trace th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; font-family: system-ui, sans-serif; }
+.trace td { white-space: nowrap; }
+.trace td.dec { white-space: normal; font-family: system-ui, sans-serif; min-width: 260px; }
+.trace .hex { display: block; padding: 1px 6px; border-radius: 4px; }
+.trace .rx { color: var(--rx); background: var(--rx-bg); }
+.trace .tx { color: var(--tx); background: var(--tx-bg); }
+.trace tr.exc .tx { color: var(--crit); background: var(--ex-bg); }
+.trace tr.web td { background: var(--web-bg); }
+.trace .mbap { opacity: .55; }
+.trace .fc { font-weight: 700; }
+.trace .arrow { font-weight: 700; margin-right: 4px; }
+.trace tr.sel td { outline: 2px solid var(--series-1); outline-offset: -2px; }
+.trace .rep { color: var(--text-secondary); font-size: 11px; }
+.trace .ign { color: var(--warn); font-weight: 600; }
+.legend-trace { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; }
+.legend-trace span { padding: 1px 8px; border-radius: 4px; }
+.decode-box { font: 12.5px/1.6 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+
+/* --------------------------------------------------------------- config */
+.cfg { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; padding: 16px 24px 32px; }
+@media (max-width: 1150px) { .cfg { grid-template-columns: 1fr; } }
+.opt { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface-1); }
+.opt h3 { margin: 0 0 4px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.opt .tag { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+@media (max-width: 700px) { .pc { grid-template-columns: 1fr; } }
+.pc ul { margin: 4px 0 0; padding-left: 18px; }
+.pc li { margin: 2px 0; }
+.pc h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.regs-line { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+code { font: 12.5px ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px; overflow: auto; max-height: 520px; margin: 8px 0 0; white-space: pre; }
+.warnbox { border-left: 3px solid var(--warn); padding: 6px 10px; margin: 8px 0; background: color-mix(in srgb, var(--warn) 10%, transparent); font-size: 13px; }
+.sticky { position: sticky; top: 12px; align-self: start; }
+.cfg-form label { margin-top: 8px; }
+.cfg-form select, .cfg-form input[type=text], .cfg-form input[type=number] { width: 100%; }
+.matrix td, .matrix th { font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -92,12 +165,18 @@ canvas { width: 100%; display: block; }
   <div class="badges">
     <span class="badge">Modbus TCP <b id="b-port">—</b></span>
     <span class="badge">Clients <b id="b-clients">0</b></span>
-    <span class="badge">Temps simulé <b id="b-time">—</b></span>
+    <span class="badge">Mesure <b id="b-source">—</b></span>
+    <span class="badge">Heure simulée <b id="b-time">—</b></span>
   </div>
 </header>
+<nav class="tabs" role="tablist">
+  <button role="tab" data-tab="sim" aria-selected="true">Simulation</button>
+  <button role="tab" data-tab="trace" aria-selected="false">Échanges Modbus <span class="muted" id="tab-count"></span></button>
+  <button role="tab" data-tab="config" aria-selected="false">Configuration Home Assistant</button>
+</nav>
 
-<main>
-  <!-- Colonne gauche : chauffe-eau -->
+<!-- ================================================================ Simulation -->
+<main class="tab" id="tab-sim">
   <div class="col">
     <section class="card">
       <h2>Chauffe-eau</h2>
@@ -110,13 +189,13 @@ canvas { width: 100%; display: block; }
         <rect x="40" y="20" width="120" height="280" rx="40" fill="none" stroke="var(--text-secondary)" stroke-width="2"/>
         <text id="tk-up-t" x="100" y="95" text-anchor="middle">—</text>
         <text id="tk-low-t" x="100" y="215" text-anchor="middle">—</text>
-        <!-- corps de chauffe -->
         <rect x="4" y="250" width="36" height="30" rx="4" fill="var(--off)" stroke="var(--text-secondary)"/>
         <rect id="el-0" x="40" y="254" width="70" height="5" rx="2.5" fill="var(--off)"/>
         <rect id="el-1" x="40" y="262" width="85" height="5" rx="2.5" fill="var(--off)"/>
         <rect id="el-2" x="40" y="270" width="100" height="5" rx="2.5" fill="var(--off)"/>
         <text x="166" y="30" style="fill:var(--text-secondary);font-size:11px;font-weight:500">chaude</text>
         <text x="166" y="298" style="fill:var(--text-secondary);font-size:11px;font-weight:500">froide</text>
+        <path id="tap" d="M160 40 h30 v14" fill="none" stroke="var(--off)" stroke-width="4"/>
       </svg>
       <dl class="kv">
         <dt>Sonde haut (1)</dt><dd id="v-up">—</dd>
@@ -125,10 +204,22 @@ canvas { width: 100%; display: block; }
         <dt>Énergie consommée</dt><dd id="v-kwh">—</dd>
         <dt>Volume</dt><dd id="v-vol">—</dd>
       </dl>
+      <div class="flow">
+        <div><b id="f-tap">0</b><span>L/min à 40 °C</span></div>
+        <div><b id="f-tank">0</b><span>L/min chauds</span></div>
+        <div><b id="f-cold">—</b><span>confort</span></div>
+      </div>
+      <div class="note" id="v-draws"></div>
+    </section>
+
+    <section class="card">
+      <h2>Bilan du jour simulé</h2>
+      <dl class="kv" id="today"></dl>
+      <h3>Jours précédents</h3>
+      <table id="days"></table>
     </section>
   </div>
 
-  <!-- Colonne centrale : pilotage + graphiques -->
   <div class="col">
     <section class="card">
       <h2>Pilotage</h2>
@@ -159,8 +250,21 @@ canvas { width: 100%; display: block; }
       <dl class="kv" style="margin-top:14px">
         <dt>Reg. 200 · étage</dt><dd id="c-step">—</dd>
         <dt>Reg. 201 · consigne</dt><dd id="c-sp">—</dd>
-        <dt>Reg. 202 · injection</dt><dd id="c-fi">—</dd>
+        <dt>Reg. 202 · injection utilisée</dt><dd id="c-fi">—</dd>
+        <dt>Dernière valeur reçue de HA (202)</dt><dd id="c-ha">—</dd>
       </dl>
+    </section>
+
+    <section class="card">
+      <h2>Compteur (point de raccordement)</h2>
+      <dl class="kv">
+        <dt>Production PV</dt><dd id="g-pv">—</dd>
+        <dt>Maison (hors corps de chauffe)</dt><dd id="g-house">—</dd>
+        <dt>Corps de chauffe</dt><dd id="g-heat">—</dd>
+        <dt><b>Réseau</b> (+ soutirage, − injection)</dt><dd id="g-grid" style="font-weight:600">—</dd>
+      </dl>
+      <div class="note" id="g-note"></div>
+      <div class="note" id="g-loads"></div>
     </section>
 
     <section class="card">
@@ -169,13 +273,19 @@ canvas { width: 100%; display: block; }
         <span style="--c:var(--series-1)">Sonde haut (1)</span>
         <span style="--c:var(--series-2)">Sonde bride (0)</span>
       </div>
-      <div class="chart-wrap"><canvas id="ch-temp" height="200"></canvas><div class="tip" id="tip-temp"></div></div>
+      <div class="chart-wrap"><canvas id="ch-temp" height="200"></canvas><div class="tip" id="tip-ch-temp"></div></div>
     </section>
 
     <section class="card">
-      <h2>Puissance du corps de chauffe</h2>
-      <div class="chart-wrap"><canvas id="ch-power" height="140"></canvas><div class="tip" id="tip-power"></div></div>
-      <div class="note">Axe horizontal : temps simulé (heures). Historique des 10 dernières minutes réelles.</div>
+      <h2>Puissances</h2>
+      <div class="legend">
+        <span style="--c:var(--series-2)">Corps de chauffe</span>
+        <span style="--c:var(--series-3)">Production PV</span>
+        <span style="--c:var(--series-4)">Maison</span>
+        <span style="--c:var(--series-5)">Réseau</span>
+      </div>
+      <div class="chart-wrap"><canvas id="ch-power" height="180"></canvas><div class="tip" id="tip-ch-power"></div></div>
+      <div class="note">Axe horizontal : heure simulée. Historique des 10 dernières minutes réelles.</div>
     </section>
 
     <section class="card">
@@ -185,29 +295,88 @@ canvas { width: 100%; display: block; }
     </section>
   </div>
 
-  <!-- Colonne droite : contrôles -->
   <div class="col">
     <section class="card">
+      <h2>Valeur d'injection (reg. 202)</h2>
+      <label class="check"><input type="checkbox" id="i-comp">
+        <span>La mesure envoyée n'inclut pas le corps de chauffe simulé (le simulateur ajoute sa propre charge)</span></label>
+      <div class="switch-card" id="comp-explain"></div>
+    </section>
+
+    <section class="card">
       <h2>Simulation</h2>
-      <label>Soutirage d'eau chaude : <b id="l-draw">0</b> L/min</label>
-      <input type="range" id="i-draw" min="0" max="20" step="0.5" value="0">
-      <div class="row" style="margin-top:6px">
-        <button data-draw="0">Aucun</button><button data-draw="6">Lavabo</button>
-        <button data-draw="9">Douche</button><button data-draw="15">Bain</button>
-      </div>
-      <label>Eau froide : <b id="l-cold">10</b> °C</label>
-      <input type="range" id="i-cold" min="4" max="20" step="1" value="10">
-      <label>Vitesse de simulation</label>
+      <label>Vitesse</label>
       <select id="i-speed">
         <option value="1">×1 (temps réel)</option><option value="10">×10</option>
         <option value="60">×60 (1 min = 1 h)</option><option value="300">×300</option>
         <option value="1440">×1440 (1 min = 1 jour)</option>
       </select>
-      <div class="note">La vitesse accélère le modèle thermique. Le watchdog Modbus reste en temps réel, comme sur l'appareil.</div>
+      <div class="note" id="speed-note"></div>
+      <label>Départ de l'horloge simulée (date → saison du PV)</label>
+      <div class="row"><input type="datetime-local" id="i-start"> <button id="b-start">Repartir</button></div>
+      <label>Puisage manuel en plus du profil : <b id="l-draw">0</b> L/min à 40 °C</label>
+      <input type="range" id="i-draw" min="0" max="20" step="0.5" value="0">
+      <div class="row" style="margin-top:6px">
+        <button data-draw="0">Aucun</button><button data-draw="4">Lavabo</button>
+        <button data-draw="9">Douche</button><button data-draw="12">Bain</button>
+      </div>
+      <label>Eau froide : <b id="l-cold">10</b> °C</label>
+      <input type="range" id="i-cold" min="4" max="20" step="1" value="10">
       <label>Remettre l'eau à une température</label>
       <div class="row"><input type="number" id="i-reset" value="20" min="5" max="85"> <button id="b-reset">Appliquer</button></div>
       <label>Coupure du thermostat interne : <b id="l-thermo">65</b> °C</label>
       <input type="range" id="i-thermo" min="50" max="80" step="1" value="65">
+    </section>
+
+    <section class="card">
+      <h2>Ménage</h2>
+      <div class="row" id="presets">
+        <button data-preset="couple">Couple</button>
+        <button data-preset="famille3">Famille de 3</button>
+        <button data-preset="famille5">Famille de 5</button>
+        <button data-preset="senior">Retraités</button>
+      </div>
+      <label class="check" style="margin-top:10px"><input type="checkbox" data-h="enabled"> Générer les puisages du profil</label>
+      <div class="grid2">
+        <div><label>Adultes</label><input type="number" data-h="adults" min="0" max="8"></div>
+        <div><label>Enfants</label><input type="number" data-h="children" min="0" max="8"></div>
+        <div><label>Douche</label><select data-h="shower">
+          <option value="eco">économique (6 L/min)</option><option value="standard">standard (9 L/min)</option>
+          <option value="pluie">pluie (12 L/min)</option></select></div>
+        <div><label>Durée d'une douche (min)</label><input type="number" data-h="shower_min" min="2" max="30"></div>
+        <div><label>Bains par semaine</label><input type="number" data-h="baths_week" min="0" max="14"></div>
+        <div><label>Douches le soir</label><select data-h="evening_share">
+          <option value="0">aucune</option><option value="0.3">environ 30 %</option>
+          <option value="0.6">environ 60 %</option><option value="1">toutes</option></select></div>
+        <div><label>Mode de vie</label><select data-h="lifestyle">
+          <option value="tot">lève-tôt (6 h)</option><option value="standard">standard (7 h)</option>
+          <option value="tard">lève-tard (8 h 30)</option></select></div>
+        <div><label>Jardin</label><select data-h="garden">
+          <option value="aucun">aucun</option><option value="arrosage">arrosage (pompe)</option>
+          <option value="piscine">piscine</option></select></div>
+      </div>
+      <label class="check"><input type="checkbox" data-h="homeoffice"> Télétravail / présence en journée</label>
+      <label class="check"><input type="checkbox" data-h="weekend_late"> Lever plus tard le week-end</label>
+      <label class="check"><input type="checkbox" data-h="dishwasher_hot"> Lave-vaisselle raccordé à l'eau chaude</label>
+      <label class="check"><input type="checkbox" data-h="washer_hot"> Lave-linge raccordé à l'eau chaude</label>
+      <label class="check"><input type="checkbox" data-h="away"> Absents (vacances)</label>
+      <div class="note">L'arrosage et la piscine utilisent de l'eau froide : ils ne tirent rien du chauffe-eau, seule leur pompe compte dans la consommation de la maison.</div>
+      <h3>Maison et photovoltaïque</h3>
+      <div class="grid2">
+        <div><label>Puissance PV (kWc)</label><input type="number" data-h="pv_kwp" min="0" max="30" step="0.5"></div>
+        <div><label>Orientation</label><select data-h="pv_orientation">
+          <option value="sud">sud</option><option value="est-ouest">est-ouest</option></select></div>
+        <div><label>Météo</label><select data-h="weather">
+          <option value="soleil">ensoleillé</option><option value="variable">variable</option>
+          <option value="couvert">couvert</option></select></div>
+        <div><label>Consommation de base (W)</label><input type="number" data-h="base_w" min="0" max="3000" step="50"></div>
+      </div>
+      <div class="note">Utilisés pour la mesure simulée (case décochée) ; affichés pour information sinon.</div>
+    </section>
+
+    <section class="card">
+      <h2>Puisages du jour</h2>
+      <div class="sched"><table id="sched"></table></div>
     </section>
 
     <section class="card">
@@ -216,15 +385,20 @@ canvas { width: 100%; display: block; }
         <button id="b-emerg">Bouton secours (24 h)</button>
         <button id="b-hp">Contact PAC : ouvert</button>
       </div>
+      <label>Entrée 0-10 V : <b id="l-analog">0</b> V → étage <b id="l-astep">0</b></label>
+      <input type="range" id="i-analog" min="0" max="10" step="0.5" value="0">
       <label>Registre 502 · entrées autorisées</label>
-      <div class="check"><input type="checkbox" id="i502-4" disabled> bit 4 · étage (200)</div>
-      <div class="check"><input type="checkbox" id="i502-3" disabled> bit 3 · consigne (201)</div>
       <div class="check"><input type="checkbox" id="i502-2" disabled> bit 2 · injection (202)</div>
+      <div class="check"><input type="checkbox" id="i502-3" disabled> bit 3 · consigne (201)</div>
+      <div class="check"><input type="checkbox" id="i502-4" disabled> bit 4 · étage (200)</div>
+      <div class="check"><input type="checkbox" id="i502-5" disabled> bit 5 · entrée 0-10 V</div>
+      <div class="check"><input type="checkbox" id="i502-6" disabled> bit 6 · contact PAC</div>
+      <div class="check"><input type="checkbox" id="i502-7" disabled> bit 7 · bouton secours</div>
+      <div class="check"><input type="checkbox" id="i502-9" disabled> <span>bit 9 · température minimale (<span id="v-mintemp">—</span> °C, reg. 595)</span></div>
       <label>Registre 504 · arrêt automatique</label>
       <div class="check"><input type="checkbox" id="i504-0" disabled> bit 0 · arrêt après 60 s sans écriture</div>
-      <label>Valeur d'injection (reg. 202)</label>
-      <div class="check"><input type="checkbox" id="i-comp" disabled> La mesure envoyée n'inclut pas le corps de chauffe simulé (le simulateur ajoute sa propre charge)</div>
-      <div class="note">Affichage seulement : ces réglages sont fixés au déploiement (variables <code>INPUT_SETTING</code>, <code>AUTO_OFF</code> et <code>COMPENSATE</code>). Home Assistant peut toujours écrire les registres 502 et 504 en Modbus, comme sur l'appareil.</div>
+      <div class="check"><input type="checkbox" id="i504-1" disabled> bit 1 · reprise automatique</div>
+      <div class="note">Affichage seulement : 502 et 504 sont fixés au déploiement (<code>INPUT_SETTING</code>, <code>AUTO_OFF</code>). Home Assistant peut les écrire en Modbus, comme sur l'appareil.</div>
     </section>
 
     <section class="card">
@@ -248,198 +422,53 @@ canvas { width: 100%; display: block; }
   </div>
 </main>
 
-<script>
-const $ = id => document.getElementById(id);
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-let S = null, dragging = false;
+<!-- ================================================================ Trace Modbus -->
+<section class="tab wide" id="tab-trace" hidden>
+  <div class="card">
+    <h2>Échanges Modbus TCP</h2>
+    <div class="legend-trace">
+      <span class="rx" style="color:var(--rx);background:var(--rx-bg)">▶ requête : Home Assistant → simulateur</span>
+      <span style="color:var(--tx);background:var(--tx-bg)">◀ réponse : simulateur → Home Assistant</span>
+      <span style="color:var(--crit);background:var(--ex-bg)">◀ réponse d'exception</span>
+      <span style="background:var(--web-bg)">écriture depuis cette page</span>
+      <span><span class="mbap">en-tête MBAP</span> · <b>code fonction</b> · données</span>
+    </div>
+    <div class="toolbar" style="margin-top:12px">
+      <select id="t-client"><option value="">Tous les clients</option></select>
+      <label class="check"><input type="checkbox" id="t-reads" checked> Lectures</label>
+      <label class="check"><input type="checkbox" id="t-writes" checked> Écritures</label>
+      <label class="check"><input type="checkbox" id="t-exc" checked> Exceptions</label>
+      <label class="check"><input type="checkbox" id="t-web" checked> Page web</label>
+      <label class="check"><input type="checkbox" id="t-group" checked> Regrouper les lectures identiques</label>
+      <input type="text" id="t-addr" placeholder="Registre (ex. 202)" style="width:150px">
+      <button id="t-pause">Pause</button>
+      <button id="t-clear">Effacer</button>
+      <button id="t-export">Exporter</button>
+      <span class="muted" id="t-stats"></span>
+    </div>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="trace-wrap" id="t-wrap">
+      <table class="trace"><thead><tr><th>Heure</th><th>Client</th><th>Trames (hexadécimal)</th><th>Décodage</th></tr></thead>
+        <tbody id="t-body"></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Détail de la transaction sélectionnée</h2>
+    <div class="decode-box" id="t-detail"><span class="muted">Cliquez sur une ligne.</span></div>
+  </div>
+</section>
 
-async function post(d) {
-  const r = await fetch('/api/control', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)});
-  S = await r.json(); render();
-}
+<!-- ================================================================ Configuration HA -->
+<section class="tab cfg" id="tab-config" hidden>
+  <div id="cfg-guide"></div>
+  <div class="sticky">
+    <section class="card cfg-form" id="cfg-form"></section>
+  </div>
+</section>
 
-// Couleur de l'eau : bleu (10 °C) → rouge (70 °C)
-function waterColor(t) {
-  const x = Math.max(0, Math.min(1, (t - 10) / 60));
-  const a = [59, 127, 217], b = [224, 74, 47];
-  return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * x)).join(',')})`;
-}
-const fmt = (v, d = 1) => v.toLocaleString('fr-CH', {minimumFractionDigits: d, maximumFractionDigits: d});
-
-const REG_DESC = {
-  100: 'Sonde 1 (haut), °C', 102: 'Sonde 2, °C', 108: 'Mode secours (0/255)', 109: 'Flags d\'état',
-  110: 'Puissance réelle, W', 200: 'Commande étage', 201: 'Consigne, W', 202: 'Injection, W',
-  502: 'Entrées autorisées', 503: 'Arrêt après N h', 504: 'Arrêt auto', 510: 'Temp. légionelles', 632: 'Sondes présentes'
-};
-const s16 = v => v & 0x8000 ? v - 0x10000 : v;
-
-function render() {
-  if (!S) return;
-  $('b-port').textContent = S.modbus_port;
-  $('b-clients').textContent = S.clients.length;
-  const h = S.sim_time_h, d = Math.floor(h / 24);
-  $('b-time').textContent = (d ? d + ' j ' : '') + Math.floor(h % 24) + ' h ' + String(Math.floor((h * 60) % 60)).padStart(2, '0');
-
-  $('tk-up').setAttribute('fill', waterColor(S.t_up));
-  $('tk-low').setAttribute('fill', waterColor(S.t_low));
-  $('tk-up-t').textContent = fmt(S.t_up) + ' °C';
-  $('tk-low-t').textContent = fmt(S.t_low) + ' °C';
-  S.relays.forEach((on, i) => {
-    $('el-' + i).setAttribute('fill', on ? css('--hot') : css('--off'));
-    $('r' + i).classList.toggle('on', on);
-  });
-  $('v-up').textContent = fmt(S.t_up) + ' °C';
-  $('v-low').textContent = fmt(S.t_low) + ' °C';
-  $('v-l40').textContent = S.litres_40 + ' L';
-  $('v-kwh').textContent = fmt(S.energy_kwh, 2) + ' kWh';
-  $('v-vol').textContent = S.tank_l + ' L';
-
-  $('v-load').innerHTML = S.load_w.toLocaleString('fr-CH') + '<small> W</small>';
-  $('v-step').textContent = `Étage ${S.step}/7`;
-  $('v-mode').textContent = S.mode;
-  $('v-thermo').innerHTML = S.thermostat_cut
-    ? '<span class="status warn">Thermostat ouvert</span>'
-    : S.emergency ? `<span class="status crit">Secours, ${fmt(S.emergency_left_h)} h restantes</span>`
-    : '<span class="status ok">Thermostat fermé</span>';
-  $('steps').innerHTML = Array.from({length: 7}, (_, i) => `<div class="${i < S.step ? 'on' : ''}"></div>`).join('');
-
-  if (S.watchdog_s === null) {
-    $('v-wd').innerHTML = S.auto_off & 1 ? '<span class="muted">aucune commande</span>' : '<span class="status warn">désactivé</span>';
-    $('wd-bar').style.width = '0%';
-  } else {
-    const cls = S.watchdog_s < 15 ? 'crit' : S.watchdog_s < 30 ? 'warn' : 'ok';
-    $('v-wd').innerHTML = `<span class="status ${cls}">${fmt(S.watchdog_s, 0)} s</span>`;
-    $('wd-bar').style.width = (S.watchdog_s / 60 * 100) + '%';
-  }
-  $('c-step').textContent = S.cmd.step;
-  $('c-sp').textContent = S.cmd.setpoint + ' W';
-  $('c-fi').textContent = S.cmd.feedin_active ? S.cmd.feedin + ' W' : '—';
-
-  $('regs').innerHTML = Object.entries(S.registers).map(([a, v]) => {
-    let shown = [201, 202].includes(+a) ? s16(v) : v;
-    if ([109, 502, 504, 632].includes(+a)) shown = '0b' + v.toString(2).padStart(6, '0');
-    return `<tr><td>${a}</td><td class="muted">${REG_DESC[a] || ''}</td><td class="num">${shown}</td></tr>`;
-  }).join('');
-
-  $('events').innerHTML = S.events.map(e => `<div><span class="muted">${e.t}</span> <span class="src">${e.src}</span> ${e.msg}</div>`).join('');
-
-  if (!dragging) {
-    $('i-draw').value = S.draw_lpm; $('l-draw').textContent = S.draw_lpm;
-    $('i-cold').value = S.t_cold; $('l-cold').textContent = S.t_cold;
-    $('i-thermo').value = S.thermostat_max; $('l-thermo').textContent = S.thermostat_max;
-  }
-  if (document.activeElement !== $('i-speed')) $('i-speed').value = String(S.speed);
-  $('b-hp').textContent = 'Contact PAC : ' + (S.hp_request ? 'fermé' : 'ouvert');
-  $('b-emerg').textContent = S.emergency ? 'Annuler le secours' : 'Bouton secours (24 h)';
-  [4, 3, 2].forEach(b => $('i502-' + b).checked = !!(S.input_setting & (1 << b)));
-  $('i504-0').checked = !!(S.auto_off & 1);
-  $('i-comp').checked = S.compensate;
-
-  drawChart('ch-temp', [
-    {key: 'up', color: css('--series-1'), name: 'Haut'},
-    {key: 'low', color: css('--series-2'), name: 'Bride'}], ' °C', false);
-  drawChart('ch-power', [{key: 'w', color: css('--series-1'), name: 'Puissance'}], ' W', true);
-}
-
-// ------------------------------------------------------------------ graphiques
-const charts = {};
-function drawChart(id, series, unit, stepped) {
-  const cv = $(id);
-  // hauteur logique lue une seule fois : cv.height (en pixels physiques) écrase l'attribut
-  if (!cv.dataset.h) cv.dataset.h = cv.getAttribute('height');
-  const H = +cv.dataset.h;
-  const W = cv.clientWidth, dpr = window.devicePixelRatio || 1;
-  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
-  const g = cv.getContext('2d'); g.scale(dpr, dpr);
-  const data = S.history;
-  const L = 44, R = 50, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
-  g.clearRect(0, 0, W, H);
-  if (data.length < 2) { g.fillStyle = css('--text-secondary'); g.fillText('En attente de données…', L, T + 20); return; }
-  const x0 = data[0].t, x1 = data[data.length - 1].t || x0 + 1e-6;
-  let lo = Infinity, hi = -Infinity;
-  data.forEach(p => series.forEach(s => { lo = Math.min(lo, p[s.key]); hi = Math.max(hi, p[s.key]); }));
-  if (stepped) { lo = 0; hi = 3500; } else { lo = Math.floor(lo / 5) * 5 - 5; hi = Math.ceil(hi / 5) * 5 + 5; }
-  const X = t => L + (x1 === x0 ? 0 : (t - x0) / (x1 - x0)) * pw;
-  const Y = v => T + ph - (v - lo) / (hi - lo) * ph;
-  // grille
-  g.strokeStyle = css('--grid'); g.lineWidth = 1; g.fillStyle = css('--text-secondary');
-  g.font = '11px system-ui, sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
-  const ticks = stepped ? [0, 1000, 2000, 3000] : niceTicks(lo, hi, 4);
-  ticks.forEach(v => { g.beginPath(); g.moveTo(L, Y(v) + .5); g.lineTo(L + pw, Y(v) + .5); g.stroke(); g.fillText(v.toLocaleString('fr-CH'), L - 6, Y(v)); });
-  g.textAlign = 'center'; g.textBaseline = 'top';
-  niceTicks(x0, x1, 5).forEach(t => { if (t >= x0 && t <= x1) g.fillText(fmtH(t), X(t), T + ph + 6); });
-  // séries
-  series.forEach(s => {
-    g.strokeStyle = s.color; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
-    data.forEach((p, i) => {
-      const x = X(p.t), y = Y(p[s.key]);
-      if (i === 0) g.moveTo(x, y);
-      else if (stepped) { g.lineTo(x, Y(data[i - 1][s.key])); g.lineTo(x, y); }
-      else g.lineTo(x, y);
-    });
-    g.stroke();
-  });
-  // étiquettes directes en fin de courbe, écartées de 14 px minimum
-  const last = data[data.length - 1];
-  const labs = series.map(s => ({y: Y(last[s.key]), txt: stepped ? last[s.key] + unit : fmt(last[s.key]) + unit}))
-    .sort((a, b) => a.y - b.y);
-  for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 14);
-  g.fillStyle = css('--text-primary'); g.textAlign = 'left'; g.textBaseline = 'middle';
-  labs.forEach(l => g.fillText(l.txt, L + pw + 6, l.y));
-  const hv = charts[id] && charts[id].hover;
-  charts[id] = {X, Y, x0, x1, L, pw, T, ph, series, unit, data, hover: hv};
-  if (hv !== undefined) drawHover(id, hv);
-}
-function fmtH(t) { const m = Math.round(t * 60); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); }
-function niceTicks(a, b, n) {
-  const span = b - a || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
-  const step = [1, 2, 5, 10].map(k => k * mag).find(s => s >= step0);
-  const out = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(6)); return out;
-}
-function drawHover(id, mx) {
-  const c = charts[id]; if (!c) return;
-  const cv = $(id), g = cv.getContext('2d');
-  const t = c.x0 + (mx - c.L) / c.pw * (c.x1 - c.x0);
-  let best = c.data[0]; c.data.forEach(p => { if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; });
-  const x = c.X(best.t);
-  g.strokeStyle = css('--text-secondary'); g.lineWidth = 1; g.setLineDash([3, 3]);
-  g.beginPath(); g.moveTo(x + .5, c.T); g.lineTo(x + .5, c.T + c.ph); g.stroke(); g.setLineDash([]);
-  c.series.forEach(s => { g.fillStyle = s.color; g.strokeStyle = css('--surface-1'); g.lineWidth = 2;
-    g.beginPath(); g.arc(x, c.Y(best[s.key]), 4, 0, 7); g.fill(); g.stroke(); });
-  const tip = $(id === 'ch-temp' ? 'tip-temp' : 'tip-power');
-  tip.innerHTML = `<div class="muted">${fmtH(best.t)}</div>` + c.series.map(s =>
-    `<div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:6px"></span>${s.name} : <b>${c.unit === ' W' ? best[s.key] : fmt(best[s.key])}${c.unit}</b></div>`).join('');
-  tip.style.display = 'block';
-  tip.style.left = Math.min(x + 12, cv.clientWidth - tip.offsetWidth - 4) + 'px'; tip.style.top = '8px';
-}
-['ch-temp', 'ch-power'].forEach(id => {
-  const cv = $(id);
-  cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); charts[id] = charts[id] || {}; charts[id].hover = e.clientX - r.left; render(); });
-  cv.addEventListener('mouseleave', () => { if (charts[id]) delete charts[id].hover; $(id === 'ch-temp' ? 'tip-temp' : 'tip-power').style.display = 'none'; render(); });
-});
-
-// ------------------------------------------------------------------ contrôles
-function slider(id, label, key) {
-  const el = $(id);
-  el.addEventListener('input', () => { dragging = true; $(label).textContent = el.value; });
-  el.addEventListener('change', () => { dragging = false; post({[key]: +el.value}); });
-}
-slider('i-draw', 'l-draw', 'draw_lpm');
-slider('i-cold', 'l-cold', 't_cold');
-slider('i-thermo', 'l-thermo', 'thermostat_max');
-document.querySelectorAll('[data-draw]').forEach(b => b.onclick = () => post({draw_lpm: +b.dataset.draw}));
-$('i-speed').onchange = e => post({speed: +e.target.value});
-$('b-reset').onclick = () => post({reset_temp: +$('i-reset').value});
-$('b-emerg').onclick = () => post({emergency: !S.emergency});
-$('b-hp').onclick = () => post({hp_request: !S.hp_request});
-$('b-write').onclick = () => post({write: {[$('w-reg').value]: +$('w-val').value}});
-
-async function poll() {
-  try { const r = await fetch('/api/state'); S = await r.json(); render(); } catch (e) {}
-  setTimeout(poll, 1000);
-}
-window.addEventListener('resize', render);
-poll();
-</script>
+<script src="app.js"></script>
+<script src="trace.js"></script>
+<script src="config.js"></script>
 </body>
 </html>
