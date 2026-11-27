@@ -9,6 +9,7 @@ avant l'installation. Une page web montre l'état du chauffe-eau.
 - `index.html`, `app.js`, `trace.js`, `config.js` : interface web en trois onglets
 - `kustomization.yaml` + `k8s/deployment.yaml` : déploiement sur le cluster (pas d'image à construire)
 - `Dockerfile`, `compose.yaml`, `.dockerignore` : image autonome pour un usage hors du cluster (voir « Conteneur Docker »)
+- `.github/workflows/docker.yml` : build multi-architecture et publication sur `ghcr.io/get-code-ch/askoheatsim`
 - `home-assistant/askoheat.yaml` : package HA (capteurs + automation d'injection)
 
 ## Déploiement
@@ -27,6 +28,29 @@ En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le
 
 Pour faire tourner le simulateur ailleurs que sur le cluster (poste de travail, Raspberry Pi, NAS, démo sur un portable),
 le dépôt fournit une image autonome. Le cluster ne l'utilise pas : aucune image n'est à publier pour Argo CD.
+
+### Image publiée (ghcr.io)
+
+GitHub Actions (`.github/workflows/docker.yml`) construit l'image pour `linux/amd64` et `linux/arm64` et la publie
+sur **`ghcr.io/get-code-ch/askoheatsim`** :
+
+| Événement | Étiquettes |
+|---|---|
+| push sur `main` (code, `Dockerfile`, workflow) | `main`, `sha-<commit>`, `latest` |
+| tag `v1.2.3` | `1.2.3`, `1.2`, `1`, `latest` |
+| pull request | build seulement, rien n'est publié |
+| lancement manuel (onglet Actions) | selon la branche choisie |
+
+```bash
+docker run -d --name askoheatsim -p 8080:8080 -p 502:5020 -v askoheatsim-state:/data ghcr.io/get-code-ch/askoheatsim:latest
+```
+
+Dans `compose.yaml`, remplacer `build:` par `image: ghcr.io/get-code-ch/askoheatsim:latest` pour utiliser l'image publiée.
+
+Publier une version : `git tag v1.0.0 && git push origin v1.0.0`.
+
+Le premier push crée le paquet en **privé** (règle de GitHub). Pour le rendre public, une seule fois :
+github.com → profil → *Packages* → `askoheatsim` → *Package settings* → *Change visibility* → *Public*.
 
 ```bash
 docker compose up -d --build        # construit l'image askoheatsim:local et démarre le conteneur

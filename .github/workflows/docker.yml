@@ -1,0 +1,88 @@
+# Construit l'image autonome du simulateur (Dockerfile) et la publie sur ghcr.io/get-code-ch/askoheatsim.
+# Le cluster n'utilise pas cette image (Argo CD monte le code depuis une ConfigMap).
+#
+#   push sur main             -> :main, :sha-<commit>, :latest
+#   tag v1.2.3                -> :1.2.3, :1.2, :1, :latest
+#   pull request              -> build seulement (rien n'est publié)
+#   lancement manuel          -> mêmes étiquettes que la branche choisie
+name: Image Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "*.py"
+      - "*.html"
+      - "*.js"
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/docker.yml
+  pull_request:
+    paths:
+      - "*.py"
+      - "*.html"
+      - "*.js"
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # push sur ghcr.io avec GITHUB_TOKEN
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Contrôle de syntaxe Python
+        run: python3 -m py_compile askoheat_sim.py household.py registers.py
+
+      - uses: docker/setup-qemu-action@v4      # arm64 (Raspberry Pi) émulé sur le runner amd64
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Connexion à ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Étiquettes et labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build (et push hors pull request)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
