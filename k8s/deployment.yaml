@@ -30,8 +30,8 @@ spec:
             - {name: INPUT_SETTING, value: "0x2FC"}
             - {name: MIN_TEMP, value: "45"}             # reg. 595 : température minimale maintenue (°C)
             - {name: AUTO_OFF, value: "0b01"}           # reg. 504 : bit0 arrêt après 60 s, bit1 redémarrage auto
-            # Valeur de départ de la case « compensation » (modifiable dans l'interface) :
-            # true = HA envoie la mesure du vrai compteur ; false = le simulateur simule la mesure et ignore 202
+            # Mode au démarrage (modifiable dans l'interface) : true = piloté par HA (port Modbus ouvert) ;
+            # false = autonome (port Modbus fermé, le simulateur calcule lui-même la mesure)
             - {name: COMPENSATE, value: "true"}
             - {name: TZ_NAME, value: "Europe/Zurich"}
             - {name: PYTHONDONTWRITEBYTECODE, value: "1"}

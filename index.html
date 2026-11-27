@@ -71,6 +71,8 @@ nav.tabs button:hover { border-color: var(--border); }
 .seg button { border: none; border-radius: 0; background: none; padding: 5px 12px; font-size: 13px; color: var(--text-secondary); }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button[aria-selected=true] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+.mode-seg button[aria-checked=true] { background: var(--text-primary); color: var(--surface-1); font-weight: 600; }
+.dbody .mode-seg { display: flex; margin-bottom: 8px; } .dbody .mode-seg button { flex: 1; padding: 7px; }
 .jpane { margin-top: 10px; max-height: 230px; overflow: auto; }
 .kv2 { grid-template-columns: repeat(2, auto 1fr); gap: 4px 16px; max-width: 760px; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 400px; max-width: 100vw; z-index: 20; background: var(--surface-1);
@@ -229,7 +231,7 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
   <div class="badges">
     <span class="badge">Modbus TCP <b id="b-port">—</b></span>
     <span class="badge">Clients <b id="b-clients">0</b></span>
-    <span class="badge">Mesure <b id="b-source">—</b></span>
+    <span class="badge">Mode <b id="b-source">—</b></span>
     <span class="badge">Heure simulée <b id="b-time">—</b></span>
   </div>
 </header>
@@ -250,6 +252,9 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
     <div class="kpi"><span>Maison</span><b id="k-house">—</b></div>
     <div class="kpi"><span>Réseau</span><b id="k-grid">—</b></div>
     <div class="kpi-actions">
+      <div class="seg mode-seg" role="radiogroup" aria-label="Mode" title="Mode de fonctionnement">
+        <button data-mode="pilote" role="radio">Piloté par HA</button><button data-mode="autonome" role="radio">Autonome</button>
+      </div>
       <select id="i-speed" title="Vitesse de simulation">
         <option value="1">×1 temps réel</option><option value="10">×10</option>
         <option value="60">×60 · 1 min = 1 h</option><option value="300">×300</option>
@@ -360,10 +365,11 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
   </div>
   <div class="drawer-body">
     <details class="dsec" data-dsec="inj" open>
-      <summary>Mesure d'injection (reg. 320 / 202)</summary>
+      <summary>Mode de fonctionnement</summary>
       <div class="dbody">
-      <label class="check"><input type="checkbox" id="i-comp">
-        <span>La mesure envoyée n'inclut pas le corps de chauffe simulé (le simulateur ajoute sa propre charge)</span></label>
+      <div class="seg mode-seg" role="radiogroup" aria-label="Mode">
+        <button data-mode="pilote" role="radio">Piloté par HA</button><button data-mode="autonome" role="radio">Autonome</button>
+      </div>
       <div class="switch-card" id="comp-explain"></div>
       </div>
     </details>

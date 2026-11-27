@@ -50,7 +50,8 @@ function render() {
   $('b-port').textContent = S.modbus_port;
   $('b-clients').textContent = S.clients.length;
   $('b-time').textContent = simTime() + (S.speed !== 1 ? ` · ×${S.speed}` : '');
-  $('b-source').textContent = S.compensate ? 'HA (compteur réel)' : 'simulée';
+  $('b-source').textContent = S.compensate ? 'piloté par HA' : 'autonome';
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-checked', b.dataset.mode === S.run_mode));
   renderLog();
   if ($('tab-sim').hidden) return;
 
@@ -129,8 +130,8 @@ function render() {
 
   // Ligne d'information sous le bandeau
   $('g-note').textContent = S.compensate
-    ? 'Pilotage sur la mesure envoyée par Home Assistant (compteur réel) ; PV, maison et réseau sont simulés pour information.'
-    : 'Mesure simulée : réseau = maison + corps de chauffe − PV ; les écritures de HA dans 320 / 202 sont ignorées.';
+    ? `Mode piloté : Home Assistant envoie la mesure de son compteur (320 / 202) et lit l'état en Modbus (${S.clients.length} client${S.clients.length > 1 ? 's' : ''}). PV, maison et réseau affichés ici sont simulés, pour information.`
+    : 'Mode autonome : port Modbus fermé, aucun échange avec Home Assistant. Réseau = maison + corps de chauffe − PV, calculé par le simulateur.';
   $('g-loads').innerHTML = S.house_loads.length ? 'Appareils en marche : ' + S.house_loads.map(l => `<span class="pill">${esc(l)}</span>`).join('') : '';
   if (document.activeElement !== $('i-speed')) $('i-speed').value = String(S.speed);
   renderSettings();
@@ -149,19 +150,19 @@ function renderLog() {
 }
 
 function renderSettings() {
-  // Case de compensation
-  const comp = $('i-comp');
-  if (document.activeElement !== comp) comp.checked = S.compensate;
+  // Mode de fonctionnement
   $('comp-explain').classList.toggle('off', !S.compensate);
   $('comp-explain').innerHTML = S.compensate
-    ? `<b>Cochée : mesure du compteur réel.</b> Home Assistant écrit dans le registre 320 (ou 202) la puissance mesurée par le gPlug (reçue en MQTT).
-       Ce compteur ne voit pas le corps de chauffe simulé : le simulateur ajoute donc sa propre charge à la valeur reçue, comme si le compteur la voyait.
-       Sans cela, il croirait le surplus toujours disponible et monterait à 3,5 kW.<div class="note">À utiliser en temps réel (×1) : Home Assistant écrit toutes les 10 s réelles.</div>`
-    : `<b>Décochée : mesure simulée.</b> Les écritures de Home Assistant dans les registres 320 et 202 sont ignorées (visibles dans l'onglet Échanges Modbus).
-       Le simulateur calcule lui-même la mesure au compteur : maison + corps de chauffe − production PV, à partir du profil du ménage.
-       <div class="note">Fonctionne à toutes les vitesses. Les commandes 318 / 319 (200 / 201) écrites par HA restent prises en compte.</div>`;
+    ? `<b>Piloté par HA.</b> Home Assistant écrit dans le registre 320 (ou 202) la puissance mesurée par son compteur (gPlug, reçu en MQTT)
+       et lit l'état du chauffe-eau en Modbus. Ce compteur ne voit pas le corps de chauffe simulé : le simulateur ajoute donc sa propre
+       charge à la valeur reçue, sinon il croirait le surplus toujours disponible et monterait à 3,5 kW.
+       <div class="note">Le simulateur ne fait que lire ce que HA lui envoie : les données réelles de consommation dans HA (compteur, tableau Énergie)
+       ne sont jamais modifiées. À utiliser en temps réel (×1), HA écrivant toutes les 10 s réelles.</div>`
+    : `<b>Autonome.</b> Le port Modbus est fermé : aucune donnée n'est échangée avec Home Assistant, dont les entités Askoheat passent
+       « indisponible ». Le simulateur calcule lui-même la mesure au compteur (maison + corps de chauffe − production PV) à partir du profil du ménage.
+       <div class="note">Fonctionne à toutes les vitesses (×1 à ×1440). Les commandes reçues de HA sont effacées au changement de mode.</div>`;
   $('speed-note').textContent = S.compensate && S.speed > 1
-    ? '· En accéléré, HA écrit toutes les ' + fmt(10 * S.speed / 60, 0) + ' min simulées : décochez la compensation (Réglages) pour une boucle interne.'
+    ? '· En accéléré, HA écrit toutes les ' + fmt(10 * S.speed / 60, 0) + ' min simulées : passez en mode autonome pour une simulation fidèle.'
     : '';
 
   // Formulaires (sans écraser une saisie en cours)
@@ -338,7 +339,7 @@ slider('i-thermo', 'l-thermo', 'thermostat_max');
 slider('i-analog', 'l-analog', 'analog_v');
 document.querySelectorAll('[data-draw]').forEach(b => b.onclick = () => post({draw_lpm: +b.dataset.draw}));
 $('i-speed').onchange = e => post({speed: +e.target.value});
-$('i-comp').onchange = e => post({compensate: e.target.checked});
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { if (S && S.run_mode !== b.dataset.mode) post({mode: b.dataset.mode}); });
 $('i-start').oninput = () => $('i-start').dataset.dirty = '1';
 $('b-start').onclick = () => { delete $('i-start').dataset.dirty; post({start: $('i-start').value}); };
 $('b-reset').onclick = () => post({reset_temp: +$('i-reset').value});

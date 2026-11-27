@@ -62,8 +62,8 @@ modbus:
 # gPlug (package gplug) : sensor.gplug_puissance_soutiree et sensor.gplug_puissance_injectee, en W.
 # Valeur envoyée = soutirage − injection, en W (négatif = surplus), convertie en
 # complément à deux (registre int16).
-# Avec le simulateur : laisser cochée la case « La mesure envoyée n'inclut pas le corps de
-# chauffe simulé ». Décochée, le simulateur ignore ces écritures et simule lui-même la mesure.
+# Avec le simulateur : mode « Piloté par HA ». En mode autonome, son port Modbus est fermé et
+# ces entités sont indisponibles.
 # L'onglet « Configuration Home Assistant » du simulateur génère d'autres variantes (201, 200, 0-10 V).
 automation:
   - alias: "ASKOHEAT – envoyer la valeur d'injection"

@@ -19,9 +19,11 @@ Variables d'environnement :
                 0-10 V, contact PAC, secours + température minimale)
   MIN_TEMP      registre 595, température minimale maintenue (défaut 45 °C)
   AUTO_OFF      registre 504, arrêt automatique  (défaut 0b01 : arrêt après 60 s sans écriture)
-  COMPENSATE    valeur de départ de la case « compensation » (défaut true) :
-                true  = HA envoie la mesure d'un vrai compteur, le simulateur y ajoute sa charge
-                false = le simulateur ignore les écritures de 202 et simule lui-même la mesure
+  COMPENSATE    mode au démarrage (défaut true) :
+                true  = mode piloté : HA envoie la mesure du vrai compteur (320 / 202), le simulateur
+                        y ajoute sa propre charge ; le port Modbus est ouvert
+                false = mode autonome : le port Modbus est fermé, rien n'est échangé avec HA ;
+                        le simulateur calcule lui-même la mesure au compteur
   TZ_NAME       fuseau de l'horloge simulée (défaut Europe/Zurich)
 """
 
@@ -490,16 +492,26 @@ class Simulator:
 
     # ------------------------------------------------------------ interface
     def set_compensate(self, on: bool):
+        """True = mode piloté par HA, False = mode autonome (port Modbus fermé)."""
         if on == self.compensate:
             return
         self.compensate = on
+        # Les commandes de HA ne survivent pas à un changement de mode : on repart de zéro
+        self.cmd_step = self.cmd_setpoint = self.cmd_feedin = 0
+        self.feedin_active = False
+        self.last_cmd_write = None
+        self.ha_feedin = None
         if on:
-            # rend la main à HA : on repart de la dernière valeur reçue (s'il y en a une)
-            self.feedin_active = self.ha_feedin is not None and self.last_cmd_write is not None
-            self.cmd_feedin = self.ha_feedin or 0
-            self.event("Compensation activée : la valeur d'injection vient de HA (compteur réel)", "web")
+            self.event("Mode piloté : port Modbus ouvert, la mesure d'injection vient de HA", "web")
         else:
-            self.event("Compensation désactivée : le simulateur simule la mesure, écritures de 202 ignorées", "web")
+            self.event("Mode autonome : port Modbus fermé, le simulateur calcule lui-même la mesure", "web")
+        self.trace({"client": "simulateur", "kind": "web", "fc": None, "addr": None, "req": "", "resp": "",
+                    "desc": "mode piloté : port Modbus ouvert" if on else "mode autonome : port Modbus fermé, connexions coupées",
+                    "note": ""})
+        try:
+            asyncio.get_running_loop().create_task(modbus_open() if on else modbus_close())
+        except RuntimeError:            # hors boucle asyncio (tests)
+            pass
 
     def control(self, d: dict):
         if "draw_lpm" in d:
@@ -512,6 +524,8 @@ class Simulator:
             self.thermostat_max = max(40.0, min(85.0, float(d["thermostat_max"])))
         if "compensate" in d:
             self.set_compensate(bool(d["compensate"]))
+        if d.get("mode") in ("pilote", "autonome"):
+            self.set_compensate(d["mode"] == "pilote")
         if "hp_request" in d:
             self.hp_request = bool(d["hp_request"])
             self.event(f"Contact PAC {'fermé' if self.hp_request else 'ouvert'}", "web")
@@ -584,7 +598,8 @@ class Simulator:
             if self.emergency() else 0,
             "hp_request": self.hp_request, "hp_power_w": self.hp_power_w,
             "analog_v": self.analog_v, "analog_step": self.analog_step(),
-            "compensate": self.compensate,
+            "compensate": self.compensate, "run_mode": "pilote" if self.compensate else "autonome",
+            "modbus_open": MODBUS_SERVER is not None,
             "clients": list(self.clients.values()),
             "sim_time_h": round(self.sim_time / 3600, 3),
             "sim_now": now.strftime("%Y-%m-%dT%H:%M"),
@@ -681,15 +696,42 @@ def describe(pdu: bytes, resp: bytes) -> dict:
     return out
 
 
+MODBUS_SERVER: asyncio.base_events.Server | None = None
+WRITERS: dict[str, asyncio.StreamWriter] = {}
+
+
+async def modbus_open():
+    """Mode piloté : écoute sur le port Modbus."""
+    global MODBUS_SERVER
+    if MODBUS_SERVER is None:
+        MODBUS_SERVER = await asyncio.start_server(modbus_conn, "0.0.0.0", MODBUS_PORT)
+        log.info("Port Modbus %d ouvert", MODBUS_PORT)
+
+
+async def modbus_close():
+    """Mode autonome : coupe les connexions et n'écoute plus (connexion refusée côté HA)."""
+    global MODBUS_SERVER
+    srv, MODBUS_SERVER = MODBUS_SERVER, None
+    if srv is not None:
+        srv.close()
+    for w in list(WRITERS.values()):
+        w.close()
+    log.info("Port Modbus %d fermé", MODBUS_PORT)
+
+
 async def modbus_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     peer = writer.get_extra_info("peername")
     ip = peer[0] if peer else "?"
     key = f"{SIM.alias(ip)}:{peer[1] if peer else '?'}"
+    if not SIM.compensate:              # course entre la fermeture et une connexion entrante
+        writer.close()
+        return
     if len(SIM.clients) >= MAX_CLIENTS:
         SIM.event(f"Connexion refusée ({MAX_CLIENTS} clients max) : {key}", "modbus")
         writer.close()
         return
     SIM.clients[key] = {"peer": key, "since": time.strftime("%H:%M:%S"), "requests": 0}
+    WRITERS[key] = writer
     SIM.event(f"Client connecté : {key}", "modbus")
     try:
         while True:
@@ -710,6 +752,7 @@ async def modbus_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter
         pass
     finally:
         SIM.clients.pop(key, None)
+        WRITERS.pop(key, None)
         SIM.event(f"Client déconnecté : {key}", "modbus")
         writer.close()
 
@@ -805,12 +848,14 @@ async def sim_loop():
 
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    mb = await asyncio.start_server(modbus_conn, "0.0.0.0", MODBUS_PORT)
+    if SIM.compensate:
+        await modbus_open()
     web = await asyncio.start_server(http_conn, "0.0.0.0", HTTP_PORT)
-    log.info("Modbus TCP sur le port %d, interface web sur http://0.0.0.0:%d/",
-             MODBUS_PORT, HTTP_PORT)
-    async with mb, web:
-        await asyncio.gather(mb.serve_forever(), web.serve_forever(), sim_loop())
+    log.info("Mode %s, Modbus TCP sur le port %d (%s), interface web sur http://0.0.0.0:%d/",
+             "piloté" if SIM.compensate else "autonome", MODBUS_PORT,
+             "ouvert" if SIM.compensate else "fermé", HTTP_PORT)
+    async with web:
+        await asyncio.gather(web.serve_forever(), sim_loop())
 
 
 if __name__ == "__main__":

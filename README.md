@@ -41,18 +41,21 @@ En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le
 
 L'état est unique et en mémoire : un réglage changé par un visiteur l'est pour tous, et tout est perdu au redémarrage du pod.
 
-## Mesure d'injection : la case de compensation
+## Deux modes : piloté par HA ou autonome
 
-Sur l'appareil réel, la boucle est fermée : quand le corps de chauffe consomme, le compteur le voit et le surplus envoyé
-dans le registre 202 diminue. Avec le simulateur, la case « La mesure envoyée n'inclut pas le corps de chauffe simulé »
-choisit d'où vient la mesure :
+Le sélecteur « Piloté par HA / Autonome » (bandeau du tableau de bord et tiroir Réglages) choisit d'où vient la mesure
+au compteur :
 
-- **cochée** (défaut, `COMPENSATE=true`) : Home Assistant écrit la mesure du vrai compteur (gPlug, reçu en MQTT).
-  Ce compteur ne voit pas la charge simulée : le simulateur l'ajoute à la valeur reçue, sinon il monterait toujours
-  à 3,5 kW. À utiliser en temps réel (×1), car HA écrit toutes les 10 s réelles.
-- **décochée** : les écritures de HA dans 202 sont ignorées (tracées « ignorée » dans l'onglet Échanges Modbus) et le
-  simulateur calcule la mesure lui-même : maison + corps de chauffe − PV, à partir du profil. Fonctionne à toutes les
-  vitesses (×1 à ×1440). Les registres 200 et 201 restent pris en compte.
+- **Piloté par HA** (défaut, `COMPENSATE=true`) : le port Modbus est ouvert. Home Assistant écrit la mesure de son
+  vrai compteur (gPlug, reçu en MQTT) dans le registre 320 (ou 202) et lit l'état du chauffe-eau. Sur l'appareil réel,
+  la boucle est fermée (le compteur voit le corps de chauffe) ; ici, le compteur ne voit pas la charge simulée, donc le
+  simulateur l'ajoute à la valeur reçue, sinon il monterait toujours à 3,5 kW. Le simulateur ne fait que lire ce que
+  HA lui envoie : les données réelles de consommation dans HA ne sont jamais modifiées. À utiliser en temps réel (×1).
+- **Autonome** : le port Modbus est fermé (connexions coupées, nouvelles connexions refusées) ; rien n'est échangé
+  avec Home Assistant, dont les entités Askoheat passent « indisponible ». Le simulateur calcule la mesure lui-même :
+  maison + corps de chauffe − PV, à partir du profil. Fonctionne à toutes les vitesses (×1 à ×1440).
+
+Les commandes reçues de HA (318-320 / 200-202) sont effacées à chaque changement de mode.
 
 `GET /api/grid` renvoie la mesure simulée (PV, maison, corps de chauffe, réseau).
 
@@ -70,14 +73,14 @@ simulée fixe la saison du PV (latitude du Plateau suisse).
 ## Configuration
 
 Les réglages de l'appareil sont fixés au déploiement, par les variables d'environnement de
-`k8s/deployment.yaml`. L'interface web les affiche sans permettre de les modifier, sauf la case de compensation.
+`k8s/deployment.yaml`. L'interface web les affiche sans permettre de les modifier, sauf le mode.
 
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `INPUT_SETTING` | `0x2FC` | registre 502 : bits 2-7 injection, consigne, étage, 0-10 V, contact PAC, secours ; bit 9 température minimale |
 | `MIN_TEMP` | `45` | registre 595 : température minimale maintenue |
 | `AUTO_OFF` | `0b01` | registre 504 : bit 0 arrêt après 60 s sans écriture, bit 1 redémarrage auto |
-| `COMPENSATE` | `true` | état de départ de la case de compensation |
+| `COMPENSATE` | `true` | mode au démarrage : `true` piloté par HA, `false` autonome (port Modbus fermé) |
 | `TANK_LITERS` | `300` | volume du chauffe-eau |
 | `START_TEMP` | `45` | température de l'eau au démarrage |
 | `TZ_NAME` | `Europe/Zurich` | fuseau de l'horloge simulée |
@@ -124,9 +127,8 @@ En accéléré, le modèle avance par pas de 10 s simulées au plus, pour que do
 Codes de fonction : 3 et 4 (lecture, mêmes registres), 6 et 16 (écriture).
 8 clients maximum, comme l'appareil.
 
-**Compensation d'injection** (case cochée par défaut) : si HA envoie la mesure d'un *vrai*
-compteur, celui-ci ne voit pas la consommation simulée. Le simulateur ajoute alors sa
-propre charge à la valeur reçue, sinon il monterait toujours à 3.5 kW.
+**Compensation d'injection** (mode piloté) : HA envoie la mesure d'un *vrai* compteur, qui ne voit pas la consommation
+simulée. Le simulateur ajoute donc sa propre charge à la valeur reçue, sinon il monterait toujours à 3,5 kW.
 
 ## Limites (à vérifier sur l'appareil réel)
 

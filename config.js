@@ -456,7 +456,7 @@
       w.push('warn', 'Sans watchdog (504 bit 0), la dernière commande reste active si HA s\'arrête. Le thermostat reste la seule limite.');
     if (C.interval < 2) w.push('warn', 'L\'appareil met ses valeurs à jour chaque seconde ; écrire plus vite charge le réseau sans gain.');
     if (C.target === 'sim' && C.mode === 'feedin')
-      w.push('ok', 'Simulateur + vrai compteur : laissez cochée la case « La mesure envoyée n\'inclut pas le corps de chauffe simulé » dans l\'onglet Simulation. Décochée, le simulateur ignore ces écritures et simule lui-même la mesure.');
+      w.push('ok', 'Simulateur + vrai compteur : mettez le simulateur en mode « Piloté par HA » (onglet Simulation). En mode autonome, son port Modbus est fermé et ces entités sont indisponibles.');
     if (C.target === 'sim' && C.mode === 'setpoint')
       w.push('ok', 'Simulateur + vrai compteur : le package ajoute la puissance simulée à la mesure (le compteur ne la voit pas). Retirez cet ajout pour l\'appareil réel en choisissant la cible « appareil réel ».');
     if (C.target === 'sim' && C.mode === 'analog')
