@@ -1,0 +1,11 @@
+# État du simulateur (configuration 500-599, mode, profil du ménage, compteurs), relu au démarrage.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: askoheatsim-state
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 256Mi

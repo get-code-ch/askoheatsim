@@ -5,6 +5,8 @@ metadata:
   labels: {app: askoheatsim}
 spec:
   replicas: 1                      # un seul : l'état du chauffe-eau est en mémoire
+  strategy:
+    type: Recreate                 # volume RWO : l'ancien pod le libère avant que le nouveau démarre
   selector:
     matchLabels: {app: askoheatsim}
   template:
@@ -15,6 +17,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 65534
         runAsGroup: 65534
+        fsGroup: 65534             # le volume d'état appartient au groupe du processus
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: sim
@@ -34,6 +37,9 @@ spec:
             # false = autonome (port Modbus fermé, le simulateur calcule lui-même la mesure)
             - {name: COMPENSATE, value: "true"}
             - {name: TZ_NAME, value: "Europe/Zurich"}
+            # État conservé entre les redémarrages ; les valeurs ci-dessus ne servent qu'au premier démarrage
+            # et aux réglages d'usine (bouton de l'interface ou registre 211)
+            - {name: STATE_FILE, value: "/data/state.json"}
             - {name: PYTHONDONTWRITEBYTECODE, value: "1"}
             - {name: PYTHONUNBUFFERED, value: "1"}
           ports:
@@ -51,7 +57,11 @@ spec:
             capabilities: {drop: [ALL]}
           volumeMounts:
             - {name: code, mountPath: /app, readOnly: true}
+            - {name: state, mountPath: /data}
       volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: askoheatsim-state
         - name: code
           configMap:
             name: askoheatsim-code

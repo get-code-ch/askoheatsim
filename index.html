@@ -466,7 +466,9 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
       <label>Registre 504 · arrêt automatique</label>
       <div class="check"><input type="checkbox" id="i504-0" disabled> bit 0 · arrêt après 60 s sans écriture</div>
       <div class="check"><input type="checkbox" id="i504-1" disabled> bit 1 · reprise automatique</div>
-      <div class="note">Affichage seulement : 502 et 504 sont fixés au déploiement (<code>INPUT_SETTING</code>, <code>AUTO_OFF</code>). Home Assistant peut les écrire en Modbus, comme sur l'appareil.</div>
+      <div class="note">Affichage seulement ici. Home Assistant peut les écrire en Modbus, comme sur l'appareil.</div>
+      <div class="row" style="margin-top:10px"><button id="b-factory">Réglages d'usine</button></div>
+      <div class="note" id="persist-note"></div>
       </div>
     </details>
     <details class="dsec" data-dsec="ecrire">

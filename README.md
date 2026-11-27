@@ -42,7 +42,17 @@ En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le
   bloc gestionnaire d'énergie 300-336 (316 état, 317 puissance, 318-320 commandes, 325-334 sondes en float32).
   Basé sur la table Modbus Askoma v1.16 (13.05.2024).
 
-L'état est unique et en mémoire : un réglage changé par un visiteur l'est pour tous, et tout est perdu au redémarrage du pod.
+L'état est unique : un réglage changé par un visiteur l'est pour tous.
+
+## Persistance
+
+Avec `STATE_FILE` (déployé : `/data/state.json` sur le volume Longhorn `askoheatsim-state`, 256 Mi), le simulateur
+sauvegarde son état toutes les 10 s et à l'arrêt (SIGTERM : sauvegarde puis sortie propre), et le relit au démarrage :
+configuration 502-504, 510, 595 et 500-599, mode piloté / autonome, profil du ménage, réglages de simulation,
+températures, compteurs du bloc 600 et bilans journaliers. Les commandes 318-320 ne sont pas conservées (watchdog).
+Les variables d'environnement ne servent alors qu'au premier démarrage et aux **réglages d'usine** : bouton du tiroir
+« Entrées de l'appareil » ou écriture du registre **211** (comme sur l'appareil) ; le ménage et l'eau ne changent pas.
+Le Deployment utilise la stratégie `Recreate` : le volume RWO est libéré par l'ancien pod avant le démarrage du nouveau.
 
 ## Deux modes : piloté par HA ou autonome
 
@@ -87,9 +97,10 @@ Les réglages de l'appareil sont fixés au déploiement, par les variables d'env
 | `TANK_LITERS` | `300` | volume du chauffe-eau |
 | `START_TEMP` | `45` | température de l'eau au démarrage |
 | `TZ_NAME` | `Europe/Zurich` | fuseau de l'horloge simulée |
+| `STATE_FILE` | (aucun) | fichier d'état JSON ; déployé : `/data/state.json` |
 
-Home Assistant peut toujours écrire les registres 502, 503, 504, 510 et 595 en Modbus, comme sur l'appareil réel.
-Ces écritures sont perdues au redémarrage du pod.
+Home Assistant peut toujours écrire les registres 502, 503, 504, 510 et 500-599 en Modbus, comme sur l'appareil réel.
+Avec `STATE_FILE`, ces écritures sont conservées au redémarrage.
 
 ## Home Assistant
 

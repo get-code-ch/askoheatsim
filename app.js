@@ -197,6 +197,9 @@ function renderSettings() {
   $('i504-0').checked = !!(S.auto_off & 1);
   $('i504-1').checked = !!(S.auto_off & 2);
   $('v-mintemp').textContent = S.min_temp;
+  $('persist-note').textContent = S.persist
+    ? 'La configuration (registres 500-599, mode, ménage) est conservée quand le simulateur redémarre. « Réglages d\'usine » la remet aux valeurs par défaut, comme le registre 211.'
+    : 'Configuration non sauvegardée : elle repart des valeurs par défaut à chaque redémarrage (pas de STATE_FILE).';
 
 }
 
@@ -353,6 +356,9 @@ $('b-reset').onclick = () => post({reset_temp: +$('i-reset').value});
 $('b-emerg').onclick = () => post({emergency: !S.emergency});
 $('b-hp').onclick = () => post({hp_request: !S.hp_request});
 $('b-write').onclick = () => post({write: {[$('w-reg').value]: +$('w-val').value}});
+$('b-factory').onclick = () => {
+  if (confirm('Remettre la configuration de l\'appareil (502-504, 510, 500-599) aux réglages d\'usine ? Le ménage et l\'eau ne changent pas.')) post({factory_reset: true});
+};
 document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => post({household: {preset: b.dataset.preset}}));
 document.querySelectorAll('[data-h]').forEach(el => el.addEventListener('change', () => {
   const k = el.dataset.h;

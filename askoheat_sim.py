@@ -25,6 +25,10 @@ Variables d'environnement :
                 false = mode autonome : le port Modbus est fermé, rien n'est échangé avec HA ;
                         le simulateur calcule lui-même la mesure au compteur
   TZ_NAME       fuseau de l'horloge simulée (défaut Europe/Zurich)
+  STATE_FILE    fichier JSON où l'état est sauvegardé (toutes les 10 s et à l'arrêt) et relu au
+                démarrage : configuration 500-599, mode, profil du ménage, températures, compteurs.
+                Absent = pas de persistance. Les variables ci-dessus ne servent alors qu'au premier
+                démarrage et à la remise aux réglages d'usine (bouton ou registre 211).
 """
 
 import asyncio
@@ -32,6 +36,7 @@ import json
 import logging
 import math
 import os
+import signal
 import struct
 import sys
 import time
@@ -78,8 +83,10 @@ FEEDIN_REGS = (REG_FEEDIN, REG_EM_FEEDIN)
 WRITABLE = {REG_STEP, REG_SETPOINT, REG_FEEDIN, REG_EM_STEP, REG_EM_SETPOINT,
             REG_EM_FEEDIN, REG_INPUT_SETTING, REG_AUTO_OFF_MIN, REG_AUTO_OFF, REG_LEGIO, REG_MIN_TEMP}
 REG_SPACE = 1000
+STATE_FILE = os.environ.get("STATE_FILE") or None
+REG_FACTORY_RESET = 211
 SERIAL = os.environ.get("SERIAL", "ASKOHEAT-SIM-0001")[:31]   # registres 0-15, 300-315, 400-415 (char[32])
-WRITABLE |= set(range(500, 600))                                # tout le bloc de configuration
+WRITABLE |= set(range(500, 600)) | {REG_FACTORY_RESET}          # bloc de configuration, remise à zéro
 SERIAL_WORDS = str_words(SERIAL, 16)
 # Durées et compteurs par entrée (registres 647-664 et 679-696), dans l'ordre de la doc
 SOURCES = ("step", "setpoint", "feedin", "hp", "analog", "emergency", "legio", "lowtariff", "mintemp")
@@ -466,6 +473,45 @@ class Simulator:
         """Sondes 0..4 ; None = non branchée."""
         return [self.t_low, self.t_up, None, None, None]
 
+    # ------------------------------------------------------------ persistance
+    PERSIST = ("input_setting", "auto_off", "auto_off_min", "legio_temp", "min_temp", "compensate",
+               "thermostat_max", "t_cold", "speed", "manual_lpm", "analog_v", "hp_request",
+               "t_low", "t_up", "energy_wh", "sim_time")
+
+    def snapshot(self) -> dict:
+        d = {k: getattr(self, k) for k in self.PERSIST}
+        d.update(version=1, saved=time.strftime("%Y-%m-%d %H:%M:%S"),
+                 conf={str(a): v for a, v in self.conf.items()}, stats=self.st,
+                 household=self.house.p, start=self.house.start.isoformat(), days=self.days)
+        return d
+
+    def restore(self, d: dict):
+        for k in self.PERSIST:
+            if k in d:
+                setattr(self, k, type(getattr(self, k))(d[k]))
+        for a, v in d.get("conf", {}).items():
+            if 500 <= int(a) <= 599:
+                self.conf[int(a)] = int(v) & 0xFFFF
+        st = d.get("stats", {})
+        for k, v in st.items():
+            if k in self.st and isinstance(v, type(self.st[k])):
+                self.st[k] = v
+        if isinstance(d.get("household"), dict):
+            self.house.p.update({k: v for k, v in d["household"].items() if k in self.house.p})
+        if d.get("start"):
+            self.house.set_start(d["start"])
+        if isinstance(d.get("days"), dict):
+            self.days = d["days"]
+        self.event(f"État restauré (sauvegarde du {d.get('saved', '?')})")
+
+    def factory_reset(self, src: str):
+        """Réglages d'usine : configuration de l'appareil seulement (pas le ménage ni l'eau)."""
+        self.input_setting, self.auto_off = INPUT_SETTING, AUTO_OFF
+        self.auto_off_min, self.legio_temp, self.min_temp = 1440, 60, MIN_TEMP
+        self.conf = config_defaults(TANK_LITERS, 3)
+        self.event("Réglages d'usine : configuration 500-599 remise aux valeurs par défaut", src)
+        save_state()
+
     def read_reg(self, a: int) -> int:
         s = self.sensors()
         sv = [0.0 if v is None else v for v in s]
@@ -591,6 +637,8 @@ class Simulator:
         elif a == REG_MIN_TEMP:
             self.min_temp = max(0, min(95, v & 0xFF))
             self.event(f"Écriture reg. 595 = {self.min_temp} °C (température minimale)", src)
+        elif a == REG_FACTORY_RESET:
+            self.factory_reset(src)
         elif 500 <= a <= 599:
             self.conf[a] = v & 0xFFFF
             self.event(f"Écriture reg. {a} = {v & 0xFFFF} (configuration)", src)
@@ -654,6 +702,8 @@ class Simulator:
             changed = self.house.update(d["household"])
             if changed:
                 self.event("Profil du ménage modifié : " + ", ".join(changed), "web")
+        if d.get("factory_reset") is True:
+            self.factory_reset("web")
         if "start" in d:
             self.house.set_start(str(d["start"]))
             self.sim_time = 0.0
@@ -704,6 +754,7 @@ class Simulator:
             if self.emergency() else 0,
             "hp_request": self.hp_request, "hp_power_w": self.hp_power_w,
             "analog_v": self.analog_v, "analog_step": self.analog_step(),
+            "persist": STATE_FILE is not None,
             "compensate": self.compensate, "run_mode": "pilote" if self.compensate else "autonome",
             "modbus_open": MODBUS_SERVER is not None,
             "clients": list(self.clients.values()),
@@ -723,6 +774,34 @@ class Simulator:
 
 
 SIM = Simulator()
+
+
+def save_state(why: str = ""):
+    """Écrit l'état dans STATE_FILE (écriture atomique). Sans STATE_FILE : rien."""
+    if not STATE_FILE:
+        return
+    try:
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(SIM.snapshot(), f, ensure_ascii=False)
+        os.replace(tmp, STATE_FILE)
+        if why:
+            log.info("État sauvegardé (%s)", why)
+    except (OSError, TypeError, ValueError) as e:
+        log.warning("Sauvegarde impossible dans %s : %s", STATE_FILE, e)
+
+
+def load_state():
+    if not STATE_FILE or not os.path.exists(STATE_FILE):
+        return
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            SIM.restore(json.load(f))
+    except (OSError, ValueError, TypeError) as e:
+        log.warning("État illisible dans %s, démarrage avec les valeurs par défaut : %s", STATE_FILE, e)
+
+
+load_state()
 
 
 # ======================================================================= Modbus
@@ -945,6 +1024,8 @@ async def sim_loop():
         SIM.tick(now - last)
         last = now
         n += 1
+        if n % 20 == 0:                      # sauvegarde toutes les 10 s
+            save_state()
         if n % 2 == 0:                       # un point d'historique par seconde
             SIM.history.append({"t": round(SIM.sim_time / 3600, 4),
                                 "up": round(SIM.t_up, 2), "low": round(SIM.t_low, 2),
@@ -960,8 +1041,18 @@ async def main():
     log.info("Mode %s, Modbus TCP sur le port %d (%s), interface web sur http://0.0.0.0:%d/",
              "piloté" if SIM.compensate else "autonome", MODBUS_PORT,
              "ouvert" if SIM.compensate else "fermé", HTTP_PORT)
+    # Arrêt propre (SIGTERM de Kubernetes, Ctrl-C) : sauvegarde puis sortie avec le code 0
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
     async with web:
-        await asyncio.gather(web.serve_forever(), sim_loop())
+        tasks = [asyncio.create_task(web.serve_forever()), asyncio.create_task(sim_loop())]
+        await stop.wait()
+        save_state("arrêt")
+        await modbus_close()
+        for t in tasks:
+            t.cancel()
 
 
 if __name__ == "__main__":
