@@ -8,7 +8,7 @@ avant l'installation. Une page web montre l'état du chauffe-eau.
 - `registers.py` : blocs paramètres (400-455) et configuration (500-599), valeurs par défaut et encodage
 - `index.html`, `app.js`, `trace.js`, `config.js` : interface web en trois onglets
 - `kustomization.yaml` + `k8s/deployment.yaml` : déploiement sur le cluster (pas d'image à construire)
-- `Dockerfile` : si vous préférez une image
+- `Dockerfile`, `compose.yaml`, `.dockerignore` : image autonome pour un usage hors du cluster (voir « Conteneur Docker »)
 - `home-assistant/askoheat.yaml` : package HA (capteurs + automation d'injection)
 
 ## Déploiement
@@ -22,6 +22,38 @@ le pod redémarre).
 - Modbus TCP : `askoheatsim.askoheatsim.svc.cluster.local`, port 502
 
 En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le port 5020).
+
+## Conteneur Docker (hors du cluster)
+
+Pour faire tourner le simulateur ailleurs que sur le cluster (poste de travail, Raspberry Pi, NAS, démo sur un portable),
+le dépôt fournit une image autonome. Le cluster ne l'utilise pas : aucune image n'est à publier pour Argo CD.
+
+```bash
+docker compose up -d --build        # construit l'image askoheatsim:local et démarre le conteneur
+docker compose logs -f              # journal du simulateur
+docker compose down                 # arrêt propre (l'état est sauvegardé, le volume est conservé)
+```
+
+Sans Compose :
+
+```bash
+docker build -t askoheatsim --build-arg VERSION=$(git describe --tags --always) --build-arg REVISION=$(git rev-parse --short HEAD) .
+docker run -d --name askoheatsim --restart unless-stopped -p 8080:8080 -p 502:5020 -v askoheatsim-state:/data askoheatsim
+```
+
+- Interface web : http://<hôte>:8080/ ; Modbus TCP : port 502 de l'hôte (le conteneur écoute sur 5020, sans privilège).
+  Dans l'intégration Askoheat+ de HA, indiquer l'adresse de l'hôte Docker.
+- **État** : volume `/data` (`STATE_FILE=/data/state.json`), sauvegardé toutes les 10 s et à `docker stop`.
+  Pour repartir des réglages d'usine : bouton de l'interface, ou supprimer le volume (`docker compose down -v`).
+  Avec un répertoire de l'hôte à la place du volume nommé, il doit être accessible en écriture à l'UID 65534
+  (`chown 65534:65534 <répertoire>`).
+- **Variables** : les mêmes que sur le cluster (`TANK_LITERS`, `COMPENSATE`, `INPUT_SETTING`, `TZ_NAME`, `SERIAL`…,
+  voir l'en-tête de `askoheat_sim.py`), avec `-e` ou dans `environment:` de `compose.yaml`. Comme l'état est conservé,
+  elles ne s'appliquent qu'au premier démarrage et après une remise aux réglages d'usine.
+- Image `python:3.13-slim` (~180 Mo), utilisateur `nobody` (65534), compatible avec `--read-only` et `--cap-drop ALL`
+  (réglages repris dans `compose.yaml`), `HEALTHCHECK` sur `/healthz`.
+- Autre architecture (Raspberry Pi 64 bits, par exemple) :
+  `docker buildx build --platform linux/arm64 -t askoheatsim:arm64 --load .`
 
 ## Interface web
 

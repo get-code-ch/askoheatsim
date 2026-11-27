@@ -1,0 +1,25 @@
+# Simulateur ASKOHEAT+ hors du cluster : docker compose up -d --build
+# Interface web : http://localhost:8080/  -  Modbus TCP : port 502 de l'hôte
+services:
+  askoheatsim:
+    build:
+      context: .
+    image: askoheatsim:local
+    container_name: askoheatsim
+    restart: unless-stopped
+    ports:
+      - "8080:8080"     # interface web
+      - "502:5020"      # Modbus TCP (502 = port standard, attendu par Home Assistant)
+    environment:
+      TZ_NAME: Europe/Zurich
+      COMPENSATE: "true"      # true = piloté par HA (port Modbus ouvert) ; false = autonome
+      # TANK_LITERS: "300"
+      # SERIAL: ASKOHEAT-SIM-0001
+    volumes:
+      - askoheatsim-state:/data   # état conservé entre les redémarrages
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  askoheatsim-state:

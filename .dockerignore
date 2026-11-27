@@ -1,0 +1,9 @@
+# Seuls les fichiers copiés par le Dockerfile sont utiles
+*
+!askoheat_sim.py
+!household.py
+!registers.py
+!index.html
+!app.js
+!trace.js
+!config.js
