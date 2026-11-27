@@ -49,8 +49,8 @@ Dans `compose.yaml`, remplacer `build:` par `image: ghcr.io/get-code-ch/askoheat
 
 Publier une version : `git tag v1.0.0 && git push origin v1.0.0`.
 
-Le premier push crée le paquet en **privé** (règle de GitHub). Pour le rendre public, une seule fois :
-github.com → profil → *Packages* → `askoheatsim` → *Package settings* → *Change visibility* → *Public*.
+Le paquet est lié au dépôt et hérite de sa visibilité : **public**, téléchargeable sans authentification
+(`docker pull` sans `docker login`). Réglage : github.com → profil → *Packages* → `askoheatsim` → *Package settings*.
 
 ```bash
 docker compose up -d --build        # construit l'image askoheatsim:local et démarre le conteneur
