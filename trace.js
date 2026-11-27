@@ -26,6 +26,27 @@
   def(323, 'entrée 0-10 V', 'f32', 'V', 2);
   ['sonde 0 (bride)', 'sonde 1 (haut)', 'sonde 2', 'sonde 3', 'sonde 4'].forEach((n, i) => def(325 + 2 * i, n, 'f32', '°C', 2));
   def(335, 'réservé', 'f32', '', 2);
+  // bloc paramètres 400-455
+  def(400, 'numéro de série', 'str', '', 16); def(416, 'type', 'u16');
+  def(417, 'puissance R1', 'u16', 'W'); def(418, 'puissance R2', 'u16', 'W'); def(419, 'puissance R3', 'u16', 'W');
+  def(420, 'numéro d\'article', 'str', '', 8); def(428, 'désignation', 'str', '', 16);
+  def(444, 'version logicielle', 'str', '', 3); def(447, 'version matérielle', 'str', '', 3);
+  def(450, 'puissance R4', 'u16', 'W'); def(451, 'puissance R5', 'u16', 'W'); def(452, 'puissance R6', 'u16', 'W');
+  def(453, 'nombre d\'étages', 'u16'); def(454, 'nombre de résistances', 'u16'); def(455, 'puissance max', 'u16', 'W');
+  // bloc configuration 500-599 (principaux)
+  def(500, 'anti-rebond relais', 'u16', 's'); def(501, 'post-circulation pompe', 'u16', 's');
+  def(507, 'volume du ballon', 'u16', 'L'); def(509, 'réglages légionelles', 'u16');
+  def(511, 'montée légionelles max', 'u16', 'min'); def(512, 'légionelles : heure', 'u16', 'h'); def(513, 'légionelles : minute', 'u16', 'min');
+  def(521, 'personnes', 'u16'); def(522, 'texte libre', 'str', '', 16);
+  def(539, 'délai injection', 'u16', 's'); def(540, 'énergie de base injection', 'u16', 'W'); def(541, 'fuseau horaire', 's16', 'h');
+  def(552, 'heures creuses : début h', 'u16'); def(553, 'heures creuses : début min', 'u16');
+  def(554, 'heures creuses : fin h', 'u16'); def(555, 'heures creuses : fin min', 'u16');
+  def(556, 'hystérésis 0-10 V', 'f32', 'V', 2);
+  for (let k = 0; k < 8; k++) { def(558 + 4 * k, `seuil 0-10 V n° ${k}`, 'f32', 'V', 2); def(560 + 4 * k, `étage du seuil ${k}`, 'u16'); def(561 + 4 * k, `limite du seuil ${k}`, 'u16', '°C'); }
+  def(590, 'étage contact PAC ouvert', 'u16'); def(591, 'étage contact PAC fermé', 'u16'); def(592, 'étage secours', 'u16');
+  def(593, 'hystérésis de température', 'u16', '°C'); def(594, 'sonde de régulation', 'u16');
+  def(596, 'limite étage', 'u16', '°C'); def(597, 'limite consigne / injection', 'u16', '°C');
+  def(598, 'limite heures creuses', 'u16', '°C'); def(599, 'limite PAC / secours', 'u16', '°C');
   def(502, 'entrées autorisées', 'r502'); def(503, 'arrêt après chauffe continue', 'u16', 'min');
   def(504, 'arrêt automatique', 'r504'); def(510, 'température légionelles', 'u16', '°C');
   def(595, 'température minimale', 'u16', '°C');
@@ -33,6 +54,17 @@
   def(631, 'erreurs', 'u16'); def(632, 'état des sondes', 'st632');
   [4, 3, 2, 1, 0].forEach((i, k) => def(634 + k, `sonde ${i}`, 'u16', '°C'));
   def(639, 'étage demandé par le 0-10 V', 'u16');
+  // bloc données 600-697 (compteurs en uint32)
+  [['durée de fonctionnement', 600], ['durée R1', 602], ['durée R2', 604], ['durée R3', 606], ['durée pompe', 608], ['durée vanne', 610]]
+    .forEach(([n, a]) => def(a, n, 'u32', 'min', 2));
+  [1, 2, 3, 4].forEach(i => def(610 + 2 * i, `commutations relais ${i}`, 'u32', '', 2));
+  def(627, 'état légionelles', 'u16'); def(628, 'depuis dernière désinfection', 'u32', 'min', 2);
+  def(640, 'limite de température en vigueur', 'u16', '°C');
+  def(641, 'arrêt auto dans', 'u32', 'min', 2); def(643, 'fin du secours dans', 'u32', 'min', 2); def(645, 'démarrages', 'u32', '', 2);
+  ['étage', 'consigne', 'injection', 'contact PAC', '0-10 V', 'secours', 'légionelles', 'heures creuses', 'temp. minimale'].forEach((n, i) => {
+    def(647 + 2 * i, `durée ${n}`, 'u32', 'min', 2); def(679 + 2 * i, `activations ${n}`, 'u32', '', 2); });
+  for (let i = 1; i <= 7; i++) def(663 + 2 * i, `durée étage ${i}`, 'u32', 'min', 2);
+  def(697, 'température max mesurée', 'u16', '°C');
   [4, 3, 2, 1, 0].forEach((i, k) => def(706 + 2 * k, `sonde ${i}`, 'f32', '°C', 2));
   def(716, 'entrée 0-10 V', 'f32', 'V', 2);
 
@@ -59,8 +91,9 @@
         return `${nf(x, 0)} ${d.unit}`;
       }
       case 'u16': return `${nf(v, 0)} ${d.unit}`.trim();
+      case 'u32': return w.length < 2 ? 'mot incomplet' : `${nf(w[0] * 65536 + w[1], 0)} ${d.unit}`.trim();
       case 'f32': return w.length < 2 ? 'mot incomplet' : `${nf(f32(w[0], w[1]), d.unit === '°C' ? 1 : 2)} ${d.unit}`.trim();
-      case 'str': return '« ' + w.map(x => String.fromCharCode(x >> 8, x & 255)).join('').replace(/\0.*$/s, '') + ' »';
+      case 'str': return '« ' + w.map(x => String.fromCharCode(x & 255, x >> 8)).join('').replace(/\0.*$/s, '') + ' »';   // octet faible en premier
       case 'b255': return v === 255 ? 'actif' : v === 0 ? 'inactif' : String(v);
       case 'step': return `étage ${v & 7} (${(v & 7) * 500} W)` + (v & 7 ? ' · ' + bits(v, ['R1', 'R2', 'R3']).join('+') : '');
       case 'st624': return flags624(v);

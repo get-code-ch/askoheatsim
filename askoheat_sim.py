@@ -41,6 +41,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))     # household.py, à côté de ce fichier
 from household import Household, tank_flow  # noqa: E402
+from registers import config_defaults, f32_from, param_block, str_words, u32_words  # noqa: E402
 
 log = logging.getLogger("askoheatsim")
 
@@ -77,7 +78,11 @@ FEEDIN_REGS = (REG_FEEDIN, REG_EM_FEEDIN)
 WRITABLE = {REG_STEP, REG_SETPOINT, REG_FEEDIN, REG_EM_STEP, REG_EM_SETPOINT,
             REG_EM_FEEDIN, REG_INPUT_SETTING, REG_AUTO_OFF_MIN, REG_AUTO_OFF, REG_LEGIO, REG_MIN_TEMP}
 REG_SPACE = 1000
-SERIAL = os.environ.get("SERIAL", "ASKOHEAT-SIM-0001")[:31]   # registres 0-15 et 300-315 (char[32])
+SERIAL = os.environ.get("SERIAL", "ASKOHEAT-SIM-0001")[:31]   # registres 0-15, 300-315, 400-415 (char[32])
+WRITABLE |= set(range(500, 600))                                # tout le bloc de configuration
+SERIAL_WORDS = str_words(SERIAL, 16)
+# Durées et compteurs par entrée (registres 647-664 et 679-696), dans l'ordre de la doc
+SOURCES = ("step", "setpoint", "feedin", "hp", "analog", "emergency", "legio", "lowtariff", "mintemp")
 
 # Bits du registre 502 (doc Askoma) : octet bas = entrées, octet haut bit 1 = température minimale
 IN_FEEDIN, IN_SETPOINT, IN_STEP, IN_ANALOG, IN_HP, IN_EMERG = 2, 3, 4, 5, 6, 7
@@ -120,12 +125,21 @@ class Simulator:
         self.auto_off_min = 1440         # 503 (minutes, 2-10080)
         self.legio_temp = 60             # 510
         self.min_temp = MIN_TEMP         # 595
+        # Bloc de configuration 500-599 (502, 503, 504, 510 et 595 sont gérés à part ci-dessus)
+        self.conf = config_defaults(TANK_LITERS, 3)
+        self.params = param_block(SERIAL)
+        self.limit_cut = False           # limite de température de l'entrée active (596-599, seuils 0-10 V)
+        self.limit = None
+        # Bloc de données 600-697 : durées en minutes, compteurs
+        self.st = {"op": 0.0, "heater": [0.0] * 3, "relay": [0] * 4, "src_min": {k: 0.0 for k in SOURCES},
+                   "src_cnt": {k: 0 for k in SOURCES}, "step_min": [0.0] * 7, "max_temp": 0.0, "legio_since": 0.0}
+        self.prev_relays = [False] * 3
+        self.prev_source = None
         self.min_heating = False
         self.thermostat_max = 65.0       # thermostat interne (réglage mécanique)
         # Entrées physiques simulées
         self.emergency_until = None      # temps simulé
         self.hp_request = False
-        self.hp_power_w = 3500
         self.analog_v = 0.0              # entrée 0-10 V
         self.compensate = COMPENSATE
         # Modèle thermique
@@ -195,10 +209,34 @@ class Simulator:
     def enabled(self, bit: int) -> bool:
         return bool(self.input_setting & (1 << bit))
 
+    def analog_threshold(self) -> int | None:
+        """Seuil 0-10 V atteint (0-7), d'après les registres 556-589 (tension, étage, limite)."""
+        best = None
+        for k in range(8):
+            if self.analog_v + 1e-6 >= f32_from(self.conf, 558 + 4 * k):
+                best = k
+        return best
+
     def analog_step(self) -> int:
-        # Hypothèse : seuils répartis linéairement (0 V = 0, 10 V = 7). Sur l'appareil,
-        # les seuils et les étages se règlent dans les registres 556-589.
-        return max(0, min(MAX_STEP, math.floor(self.analog_v / 10 * MAX_STEP + 1e-9)))
+        k = self.analog_threshold()
+        return 0 if k is None else max(0, min(MAX_STEP, self.conf[560 + 4 * k] & 0xFF))
+
+    @property
+    def hp_power_w(self) -> int:
+        return (self.conf[591] & 0xFF) * STEP_W
+
+    def temp_limit(self, source: str | None) -> int | None:
+        """Limite de température de l'entrée qui pilote (°C, sur la sonde de régulation)."""
+        if source == "step":
+            return self.conf[596] & 0xFF
+        if source in ("setpoint", "feedin"):
+            return self.conf[597] & 0xFF
+        if source in ("hp", "emergency"):
+            return self.conf[599] & 0xFF
+        if source == "analog":
+            k = self.analog_threshold()
+            return None if k is None else self.conf[561 + 4 * k] & 0xFF
+        return None
 
     def clear_commands(self, why: str):
         self.cmd_step = self.cmd_setpoint = 0
@@ -212,9 +250,11 @@ class Simulator:
     def decide_step(self) -> tuple[int, str, str | None]:
         # Priorités : hypothèse (la doc n'en donne pas) — secours > PAC > 0-10 V > 200 > 201 > 202
         if self.emergency() and self.enabled(IN_EMERG):
-            return MAX_STEP, "secours (100 % pendant 24 h)", "emergency"
-        if self.hp_request and self.enabled(IN_HP):
-            return min(MAX_STEP, self.hp_power_w // STEP_W), "contact « Heatpump Request »", "hp"
+            return min(MAX_STEP, self.conf[592] & 0xFF), "secours (étage du reg. 592)", "emergency"
+        if self.enabled(IN_HP) and self.hp_request:
+            return min(MAX_STEP, self.conf[591] & 0xFF), "contact PAC fermé (étage du reg. 591)", "hp"
+        if self.enabled(IN_HP) and self.conf[590] & 0xFF:
+            return min(MAX_STEP, self.conf[590] & 0xFF), "contact PAC ouvert (étage du reg. 590)", "hp"
         if self.enabled(IN_ANALOG) and self.analog_v >= 0.5:
             return self.analog_step(), f"entrée 0-10 V ({self.analog_v:.1f} V)", "analog"
         if self.enabled(IN_STEP) and self.cmd_step & 0x7:
@@ -235,7 +275,7 @@ class Simulator:
                 return step, f"injection (reg. 202, {src})", "feedin"
         # Maintien d'une température minimale (sonde de la bride), en dernier recours
         if self.enabled(IN_MIN_TEMP):
-            if self.t_low < self.min_temp - MIN_TEMP_HYST:
+            if self.t_low < self.min_temp - (self.conf[593] & 0xFF or MIN_TEMP_HYST):
                 self.min_heating = True
             elif self.t_low >= self.min_temp:
                 self.min_heating = False
@@ -290,6 +330,17 @@ class Simulator:
         if self.thermostat_cut and step:
             step, mode = 0, mode + " — coupé par le thermostat"
 
+        # Limite de température de l'entrée active (registres 596-599, seuils 0-10 V), hystérésis 593
+        self.limit = self.temp_limit(source)
+        if self.limit is None:
+            self.limit_cut = False
+        elif self.limit_cut and self.t_low < self.limit - (self.conf[593] & 0xFF):
+            self.limit_cut = False
+        elif not self.limit_cut and self.t_low >= self.limit:
+            self.limit_cut = True
+        if self.limit_cut and step:
+            step, mode = 0, mode + f" — limite {self.limit} °C atteinte"
+
         # Arrêt automatique après N minutes de chauffe continue (reg. 503)
         if step and self.on_since is None:
             self.on_since = self.sim_time
@@ -312,6 +363,28 @@ class Simulator:
 
         self.thermal(dt)
         self.account(now, dt)
+        self.count(dt)
+
+    def count(self, dt: float):
+        """Bloc 600-697 : durées de fonctionnement et compteurs."""
+        st, m = self.st, dt / 60
+        st["op"] += m
+        relays = self.relays()
+        for i, on in enumerate(relays):
+            if on:
+                st["heater"][i] += m
+            if on and not self.prev_relays[i]:
+                st["relay"][i] += 1
+        self.prev_relays = relays
+        if self.step and self.source in st["src_min"]:
+            st["src_min"][self.source] += m
+            if self.source != self.prev_source:
+                st["src_cnt"][self.source] += 1
+        self.prev_source = self.source if self.step else None
+        if self.step:
+            st["step_min"][self.step - 1] += m
+        st["max_temp"] = max(st["max_temp"], self.t_low, self.t_up)
+        st["legio_since"] += m
 
     def thermal(self, dt: float):
         c = 4186.0
@@ -381,7 +454,7 @@ class Simulator:
         hi |= (self.source == "setpoint") << 2
         hi |= (self.source == "feedin" and self.cmd_feedin < 0) << 3
         hi |= self.auto_off_active << 4
-        hi |= self.thermostat_cut << 6
+        hi |= (self.thermostat_cut or self.limit_cut) << 6
         return (hi << 8) | lo
 
     def control_input(self) -> int:
@@ -401,9 +474,9 @@ class Simulator:
         if a == 108 or a == 321:
             return 255 if self.emergency() else 0
         if 300 <= a <= 315 or 0 <= a <= 15:          # numéro de série, 2 caractères par mot
-            raw = SERIAL.encode("ascii", "replace").ljust(32, b"\0")
-            i = (a % 300) * 2
-            return raw[i] << 8 | raw[i + 1]
+            return SERIAL_WORDS[a % 300]
+        if 400 <= a <= 455:                          # bloc paramètres
+            return self.params.get(a, 0)
         if a == 316:                                 # bloc EMA : état (= 624)
             return self.status_flags()
         if a == 317:                                 # bloc EMA : puissance (= 625)
@@ -436,10 +509,14 @@ class Simulator:
             return self.legio_temp
         if a == REG_MIN_TEMP:
             return self.min_temp
+        if 500 <= a <= 599:                          # reste du bloc de configuration
+            return self.conf.get(a, 0)
+        if 600 <= a <= 697 and a not in (624, 625, 626, 632) and not 634 <= a <= 639:
+            return self.data_reg(a)
         if a == 631:
             return 0
         if a == 632:                                 # sondes présentes + limite atteinte
-            return sum(1 << i for i, v in enumerate(s) if v is not None) | (self.thermostat_cut << 6)
+            return sum(1 << i for i, v in enumerate(s) if v is not None) | ((self.thermostat_cut or self.limit_cut) << 6)
         if 634 <= a <= 638:                          # sondes 4..0, entier
             return u16(round(sv[4 - (a - 634)]))
         if a == 639:
@@ -449,6 +526,32 @@ class Simulator:
             return f32_words(sv[idx])[(a - 706) % 2]
         if a in (716, 717):                          # tension entrée 0-10 V
             return f32_words(self.analog_v)[a - 716]
+        return 0
+
+    def data_reg(self, a: int) -> int:
+        """Bloc de données 600-697 (hors registres d'état traités dans read_reg)."""
+        st = self.st
+        u32 = {600: st["op"], 602: st["heater"][0], 604: st["heater"][1], 606: st["heater"][2],
+               612: st["relay"][0], 614: st["relay"][1], 616: st["relay"][2], 618: st["relay"][3],
+               628: st["legio_since"], 645: 1}
+        countdown = 0
+        if self.on_since is not None:
+            countdown = max(0.0, self.auto_off_min - (self.sim_time - self.on_since) / 60)
+        u32[641] = countdown
+        u32[643] = (self.emergency_until - self.sim_time) / 60 if self.emergency() else 0
+        for i, k in enumerate(SOURCES):
+            u32[647 + 2 * i] = st["src_min"][k]
+            u32[679 + 2 * i] = st["src_cnt"][k]
+        for i in range(7):
+            u32[665 + 2 * i] = st["step_min"][i]
+        if a in u32:
+            return u32_words(int(u32[a]))[0]
+        if a - 1 in u32:
+            return u32_words(int(u32[a - 1]))[1]
+        if a == 640:                                 # limite de température en vigueur
+            return self.limit if self.limit is not None else round(self.thermostat_max)
+        if a == 697:
+            return round(st["max_temp"])
         return 0
 
     def write_reg(self, a: int, v: int, src: str) -> tuple[bool, str]:
@@ -488,6 +591,9 @@ class Simulator:
         elif a == REG_MIN_TEMP:
             self.min_temp = max(0, min(95, v & 0xFF))
             self.event(f"Écriture reg. 595 = {self.min_temp} °C (température minimale)", src)
+        elif 500 <= a <= 599:
+            self.conf[a] = v & 0xFFFF
+            self.event(f"Écriture reg. {a} = {v & 0xFFFF} (configuration)", src)
         return True, note
 
     # ------------------------------------------------------------ interface
@@ -530,7 +636,7 @@ class Simulator:
             self.hp_request = bool(d["hp_request"])
             self.event(f"Contact PAC {'fermé' if self.hp_request else 'ouvert'}", "web")
         if "hp_power_w" in d:
-            self.hp_power_w = max(0, min(3500, int(d["hp_power_w"])))
+            self.conf[591] = max(0, min(MAX_STEP, int(d["hp_power_w"]) // STEP_W))
         if "analog_v" in d:
             self.analog_v = max(0.0, min(10.0, float(d["analog_v"])))
             self.event(f"Entrée 0-10 V : {self.analog_v:.1f} V", "web")

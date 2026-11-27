@@ -11,6 +11,7 @@ configMapGenerator:
     files:
       - askoheat_sim.py
       - household.py
+      - registers.py
       - index.html
       - app.js
       - trace.js

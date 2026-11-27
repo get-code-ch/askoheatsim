@@ -5,6 +5,7 @@ avant l'installation. Une page web montre l'état du chauffe-eau.
 
 - `askoheat_sim.py` : serveur Modbus TCP + modèle thermique + serveur web (Python ≥ 3.10, aucune dépendance)
 - `household.py` : profil du ménage (puisages, consommation de la maison, production PV)
+- `registers.py` : blocs paramètres (400-455) et configuration (500-599), valeurs par défaut et encodage
 - `index.html`, `app.js`, `trace.js`, `config.js` : interface web en trois onglets
 - `kustomization.yaml` + `k8s/deployment.yaml` : déploiement sur le cluster (pas d'image à construire)
 - `Dockerfile` : si vous préférez une image
@@ -118,6 +119,20 @@ L'identifiant d'unité Modbus est omis : l'ASKOHEAT+ l'ignore.
 | 626 | entrée qui pilote | bits 7 consigne, 6 injection, 5 secours, 4 PAC, 3 0-10 V, 2 étage, 0 température minimale |
 | 632 | état des sondes | bits 0-4 sondes présentes, bit 6 limite atteinte |
 | 639 | étage demandé par le 0-10 V | |
+| 400-455 | paramètres (lecture) | n° de série, type (7 étages, à bride), R1-R3 500 / 1000 / 2000 W, article, versions « SIM », 7 étages, 3 résistances, 3500 W |
+| 500-599 | configuration (lecture / écriture) | tout le bloc est stocké ; utilisés par la simulation : 556-589 seuils 0-10 V (tension, étage, limite), 590-592 étages contact PAC ouvert / fermé et secours, 593 hystérésis, 596-599 limites de température par entrée |
+| 600-697 | données de fonctionnement | durées (totale, par résistance, par entrée, par étage) et compteurs (commutations, activations) en uint32, 640 limite en vigueur, 641 / 643 comptes à rebours, 697 température max |
+
+### Compatibilité avec l'intégration Home Assistant toggm/askoheat
+
+Le simulateur sert les quatre blocs que l'intégration lit (300 ×37 et 400 ×56 en fonction 4, 500 ×100 en fonction 3,
+600 ×98 en fonction 4) et accepte ses écritures (fonction 16) sur tout le bloc 500-599. L'encodage suit l'intégration,
+écrite contre l'appareil réel : chaînes à 2 caractères par mot, **octet de poids faible en premier** ; uint32 et float32
+mot de poids fort en premier ; heures sur deux registres (heure, minute). La doc Askoma décrit 512-515 comme un texte
+(« 12:00 AM ») : à vérifier sur l'appareil.
+
+Écart à connaître : pour « secours actif », l'intégration lit le bit 8 du registre d'état 316 / 624 ; la doc Askoma
+place le secours au bit 7 et les légionelles au bit 8. Le simulateur suit la doc.
 
 Priorité (hypothèse, non documentée) : secours > contact PAC > 0-10 V > étage (200) > consigne (201) > injection (202)
 > température minimale. Le thermostat interne (65 °C, réglable) coupe toujours en dernier.

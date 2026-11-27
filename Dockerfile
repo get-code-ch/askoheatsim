@@ -1,7 +1,7 @@
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MODBUS_PORT=5020 HTTP_PORT=8080
 WORKDIR /app
-COPY askoheat_sim.py household.py index.html app.js trace.js config.js ./
+COPY askoheat_sim.py household.py registers.py index.html app.js trace.js config.js ./
 USER 65534:65534
 EXPOSE 5020 8080
 CMD ["python", "/app/askoheat_sim.py"]
