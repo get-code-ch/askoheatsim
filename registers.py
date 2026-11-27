@@ -76,7 +76,9 @@ def config_defaults(tank_liters: float, household: int) -> dict[int, int]:
     put(539, [0])                    # délai d'enclenchement en mode injection (s)
     put(540, [0])                    # niveau d'énergie de base en mode injection (W)
     put(541, [1, 0])                 # fuseau horaire (UTC+1), heure d'été non
+    put(546, str_words("19200", 3))   # 546-548 vitesse RTU (texte, valeurs de l'intégration : 1200 … 230400)
     put(550, [1])                    # adresse esclave RTU
+    put(551, [0])                    # type de compteur : non installé
     put(552, [22, 0, 6, 0])          # heures creuses 22:00-06:00
     put(556, f32_words(0.2))         # hystérésis de l'entrée 0-10 V (V)
     # 8 seuils 0-10 V : tension, étage, limite de température — répartis de 0 à 10 V, étages 0 à 7
