@@ -162,9 +162,12 @@
 
   function formHtml() {
     const opt = (v, t) => `<option value="${v}">${t}</option>`;
-    return `<div class="row" style="justify-content:space-between;margin-bottom:12px">
-        <h2 style="margin:0">Générateur de package Home Assistant</h2>
-        <button class="ghost" id="cfg-show" hidden>Afficher le YAML</button></div>
+    return `<h2>Générateur de package Home Assistant</h2>
+      <div class="row" style="margin-bottom:12px">
+        <button class="primary" id="cfg-toggle">Afficher le YAML</button>
+        <button data-yaml="copy">Copier</button>
+        <button data-yaml="download">Télécharger</button>
+      </div>
       <div class="grid2">
         <div><label>Voie de pilotage</label><select data-c="mode">
           ${opt('feedin', '320 injection')}${opt('setpoint', '319 consigne')}${opt('step', '318 étage')}${opt('analog', '0-10 V (Shelly)')}</select></div>
@@ -490,7 +493,8 @@
       openedFor = C.mode;
     }
     $('tab-config').classList.toggle('noyaml', !!C.hideYaml);
-    $('cfg-show').hidden = !C.hideYaml;
+    $('cfg-toggle').textContent = C.hideYaml ? 'Afficher le YAML' : 'Masquer le YAML';
+    $('cfg-toggle').classList.toggle('primary', !!C.hideYaml);
     $('cfg-yaml').textContent = yaml();
     warnings();
     localStorage.setItem('askoheat-cfg', JSON.stringify(C));
@@ -512,11 +516,26 @@
   });
   $('cfg-reset').onclick = () => { C = {...DEFAULTS, hideYaml: C.hideYaml}; sync(); };
   $('cfg-hide').onclick = () => { C.hideYaml = true; sync(); };
-  $('cfg-show').onclick = () => { C.hideYaml = false; sync(); };
-  $('cfg-copy').onclick = async () => {
-    try { await navigator.clipboard.writeText($('cfg-yaml').textContent); $('cfg-copy').textContent = 'Copié'; }
-    catch (e) { const r = document.createRange(); r.selectNodeContents($('cfg-yaml')); getSelection().removeAllRanges(); getSelection().addRange(r); $('cfg-copy').textContent = 'Sélectionné : Ctrl+C'; }
-    setTimeout(() => $('cfg-copy').textContent = 'Copier', 2000);
-  };
+  $('cfg-toggle').onclick = () => { C.hideYaml = !C.hideYaml; sync(); };
+  // Copier / Télécharger : boutons du formulaire et de la colonne YAML
+  async function copyYaml(btn) {
+    const label = btn.textContent;
+    try { await navigator.clipboard.writeText(yaml()); btn.textContent = 'Copié ✓'; }
+    catch (e) {
+      $('cfg-yaml').textContent = yaml();
+      if (C.hideYaml) { C.hideYaml = false; sync(); }
+      const r = document.createRange(); r.selectNodeContents($('cfg-yaml')); getSelection().removeAllRanges(); getSelection().addRange(r);
+      btn.textContent = 'Sélectionné : Ctrl+C';
+    }
+    setTimeout(() => btn.textContent = label, 2000);
+  }
+  function downloadYaml() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([yaml()], {type: 'text/yaml'}));
+    a.download = 'askoheat.yaml';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  document.querySelectorAll('[data-yaml]').forEach(b => b.onclick = () => b.dataset.yaml === 'copy' ? copyYaml(b) : downloadYaml());
   sync();
 })();

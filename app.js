@@ -51,7 +51,18 @@ function render() {
   $('b-clients').textContent = S.clients.length;
   $('b-time').textContent = simTime() + (S.speed !== 1 ? ` · ×${S.speed}` : '');
   $('b-source').textContent = S.compensate ? 'HA (compteur réel)' : 'simulée';
+  renderLog();
   if ($('tab-sim').hidden) return;
+
+  // Bandeau
+  $('k-up').textContent = fmt(S.t_up) + ' °C';
+  $('k-low').textContent = fmt(S.t_low) + ' °C';
+  $('k-l40').innerHTML = S.litres_40 + '<small> L</small>';
+  $('k-load').innerHTML = fmtW(S.load_w) + ` <small>ét. ${S.step}</small>`;
+  $('k-pv').textContent = fmtKW(S.pv_w);
+  $('k-house').textContent = fmtKW(S.house_w);
+  $('k-grid').innerHTML = `<span class="${S.grid_w < 0 ? 'ok' : S.grid_w > 0 ? 'warn' : ''}">${S.grid_w > 0 ? '+' : ''}${fmtKW(S.grid_w)}</span>` +
+    ` <small>${S.grid_w < 0 ? 'injection' : S.grid_w > 0 ? 'soutirage' : ''}</small>`;
 
   // Chauffe-eau
   $('tk-up').setAttribute('fill', waterColor(S.t_up));
@@ -63,9 +74,6 @@ function render() {
     $('el-' + i).setAttribute('fill', on ? css('--hot') : css('--off'));
     $('r' + i).classList.toggle('on', on);
   });
-  $('v-up').textContent = fmt(S.t_up) + ' °C';
-  $('v-low').textContent = fmt(S.t_low) + ' °C';
-  $('v-l40').textContent = S.litres_40 + ' L';
   $('v-kwh').textContent = fmt(S.energy_kwh, 2) + ' kWh';
   $('v-vol').textContent = S.tank_l + ' L';
   $('f-tap').textContent = fmt(S.tap_lpm);
@@ -86,6 +94,15 @@ function render() {
   $('days').innerHTML = past.length ? '<thead><tr><th>Jour</th><th class="num">L 40 °C</th><th class="num">Chauffe kWh</th><th class="num">dont PV</th><th class="num">Froid min</th></tr></thead>' +
     past.map(d => `<tr><td>${d.date.slice(8)}.${d.date.slice(5, 7)}</td><td class="num">${fmt(d.tap_l, 0)}</td><td class="num">${fmt(d.heater_kwh, 1)}</td><td class="num">${fmt(d.heater_pv_kwh, 1)}</td><td class="num">${fmt(d.cold_min, 0)}</td></tr>`).join('')
     : '<tr><td class="muted">Accélérez la simulation pour voir plusieurs jours.</td></tr>';
+
+  // Puisages du jour
+  const nowHM = S.sim_now.slice(11, 16);
+  $('sched').innerHTML = S.schedule.length ? '<thead><tr><th>Heure</th><th>Puisage</th><th class="num">min</th><th class="num">L à 40 °C</th></tr></thead>' +
+    S.schedule.map(e => {
+      const end = addMin(e.h, e.min);
+      const cls = e.h <= nowHM && nowHM < end ? 'now' : end <= nowHM ? 'past' : '';
+      return `<tr class="${cls}"><td>${e.h}</td><td>${esc(e.label)}</td><td class="num">${fmt(e.min)}</td><td class="num">${e.litres}</td></tr>`;
+    }).join('') : '<tr><td class="muted">Aucun puisage prévu.</td></tr>';
 
   // Pilotage
   $('v-load').innerHTML = S.load_w.toLocaleString('fr-CH') + '<small> W</small>';
@@ -110,23 +127,28 @@ function render() {
   $('c-ha').innerHTML = S.cmd.ha_feedin === null ? '—'
     : S.cmd.ha_feedin + ' W' + (S.compensate ? '' : ' <span class="muted">ignorée</span>');
 
-  // Compteur
-  $('g-pv').textContent = fmtW(S.pv_w);
-  $('g-house').textContent = fmtW(S.house_w);
-  $('g-heat').textContent = fmtW(S.load_w);
-  $('g-grid').textContent = (S.grid_w > 0 ? '+' : '') + fmtW(S.grid_w);
+  // Ligne d'information sous le bandeau
   $('g-note').textContent = S.compensate
-    ? 'Valeurs simulées pour information : avec la case cochée, le pilotage utilise la mesure envoyée par Home Assistant.'
-    : 'Cette mesure simulée remplace la valeur 202 de Home Assistant : la boucle est fermée dans le simulateur.';
+    ? 'Pilotage sur la mesure envoyée par Home Assistant (compteur réel) ; PV, maison et réseau sont simulés pour information.'
+    : 'Mesure simulée : réseau = maison + corps de chauffe − PV ; les écritures de HA dans 320 / 202 sont ignorées.';
   $('g-loads').innerHTML = S.house_loads.length ? 'Appareils en marche : ' + S.house_loads.map(l => `<span class="pill">${esc(l)}</span>`).join('') : '';
+  if (document.activeElement !== $('i-speed')) $('i-speed').value = String(S.speed);
+  renderSettings();
+  renderCharts();
 
-  // Registres
+}
+
+// Registres et journal : onglet Échanges Modbus
+function renderLog() {
   $('regs').innerHTML = Object.entries(S.registers).map(([a, v]) => {
     let shown = [319, 320].includes(+a) ? s16(v) : v;
     if ([316, 502, 504, 626, 632].includes(+a)) shown = bin(v, [316, 502].includes(+a) ? 16 : 8);
     return `<tr><td>${a}</td><td class="muted">${REG_DESC[a] || ''}</td><td class="num"><code>${shown}</code></td></tr>`;
   }).join('');
+  $('events').innerHTML = S.events.map(e => `<div><span class="muted">${e.t}</span> <span class="src">${esc(e.src)}</span> ${esc(e.msg)}</div>`).join('');
+}
 
+function renderSettings() {
   // Case de compensation
   const comp = $('i-comp');
   if (document.activeElement !== comp) comp.checked = S.compensate;
@@ -137,12 +159,13 @@ function render() {
        Sans cela, il croirait le surplus toujours disponible et monterait à 3,5 kW.<div class="note">À utiliser en temps réel (×1) : Home Assistant écrit toutes les 10 s réelles.</div>`
     : `<b>Décochée : mesure simulée.</b> Les écritures de Home Assistant dans les registres 320 et 202 sont ignorées (visibles dans l'onglet Échanges Modbus).
        Le simulateur calcule lui-même la mesure au compteur : maison + corps de chauffe − production PV, à partir du profil du ménage.
-       <div class="note">Fonctionne à toutes les vitesses. Les registres 200 et 201 écrits par HA restent pris en compte.</div>`;
+       <div class="note">Fonctionne à toutes les vitesses. Les commandes 318 / 319 (200 / 201) écrites par HA restent prises en compte.</div>`;
   $('speed-note').textContent = S.compensate && S.speed > 1
-    ? 'En accéléré avec la mesure de HA, 10 s réelles entre deux écritures représentent ' + fmt(10 * S.speed / 60, 0) + ' min simulées : la régulation suit mal. Décochez la case pour une boucle interne.'
-    : 'La vitesse accélère le modèle thermique et l\'horloge du ménage. Le watchdog Modbus reste en temps réel, comme sur l\'appareil.';
+    ? '· En accéléré, HA écrit toutes les ' + fmt(10 * S.speed / 60, 0) + ' min simulées : décochez la compensation (Réglages) pour une boucle interne.'
+    : '';
 
   // Formulaires (sans écraser une saisie en cours)
+  if ($('drawer').hidden) return;
   if (!dragging) {
     $('i-draw').value = S.draw_lpm; $('l-draw').textContent = S.draw_lpm;
     $('i-cold').value = S.t_cold; $('l-cold').textContent = S.t_cold;
@@ -150,7 +173,6 @@ function render() {
     $('i-analog').value = S.analog_v; $('l-analog').textContent = fmt(S.analog_v);
   }
   $('l-astep').textContent = S.analog_step;
-  if (document.activeElement !== $('i-speed')) $('i-speed').value = String(S.speed);
   if (document.activeElement !== $('i-start') && !$('i-start').dataset.dirty) $('i-start').value = S.sim_start;
   const H = S.household;
   document.querySelectorAll('[data-h]').forEach(el => {
@@ -160,15 +182,6 @@ function render() {
   });
   document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('sel', b.dataset.preset === H.preset));
 
-  // Puisages du jour
-  const nowHM = S.sim_now.slice(11, 16);
-  $('sched').innerHTML = S.schedule.length ? '<thead><tr><th>Heure</th><th>Puisage</th><th class="num">min</th><th class="num">L à 40 °C</th></tr></thead>' +
-    S.schedule.map(e => {
-      const end = addMin(e.h, e.min);
-      const cls = e.h <= nowHM && nowHM < end ? 'now' : end <= nowHM ? 'past' : '';
-      return `<tr class="${cls}"><td>${e.h}</td><td>${esc(e.label)}</td><td class="num">${fmt(e.min)}</td><td class="num">${e.litres}</td></tr>`;
-    }).join('') : '<tr><td class="muted">Aucun puisage prévu.</td></tr>';
-
   // Entrées
   $('b-hp').textContent = 'Contact PAC : ' + (S.hp_request ? 'fermé' : 'ouvert');
   $('b-emerg').textContent = S.emergency ? 'Annuler le secours' : 'Bouton secours (24 h)';
@@ -177,77 +190,87 @@ function render() {
   $('i504-1').checked = !!(S.auto_off & 2);
   $('v-mintemp').textContent = S.min_temp;
 
-  $('events').innerHTML = S.events.map(e => `<div><span class="muted">${e.t}</span> <span class="src">${esc(e.src)}</span> ${esc(e.msg)}</div>`).join('');
+}
 
-  drawChart('ch-temp', [
-    {key: 'up', color: css('--series-1'), name: 'Haut'},
-    {key: 'low', color: css('--series-2'), name: 'Bride'}], ' °C', false);
-  drawChart('ch-power', [
-    {key: 'w', color: css('--series-2'), name: 'Corps de chauffe', stepped: true},
-    {key: 'pv', color: css('--series-3'), name: 'PV'},
-    {key: 'house', color: css('--series-4'), name: 'Maison'},
-    {key: 'grid', color: css('--series-5'), name: 'Réseau'}], ' W', true);
+function renderCharts() {
+  drawMain();
 }
 function addMin(hm, m) {
   const t = +hm.slice(0, 2) * 60 + +hm.slice(3) + Math.ceil(m);
   return String(Math.floor(t / 60) % 24).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
 }
 
-// ------------------------------------------------------------------ graphiques
-const charts = {};
-function drawChart(id, series, unit, power) {
-  const cv = $(id);
+// ------------------------------------------------------------------ graphique combiné
+// Deux zones sur un même canevas et un même axe du temps : températures en haut, puissances en bas.
+const PANES = () => [
+  {h: .5, unit: ' °C', series: [
+    {key: 'up', color: css('--series-1'), name: 'Haut'},
+    {key: 'low', color: css('--series-2'), name: 'Bride'}]},
+  {h: .5, unit: ' W', power: true, series: [
+    {key: 'w', color: css('--hot'), name: 'Corps de chauffe', stepped: true},
+    {key: 'pv', color: css('--series-3'), name: 'PV'},
+    {key: 'house', color: css('--series-4'), name: 'Maison'},
+    {key: 'grid', color: css('--series-5'), name: 'Réseau'}]},
+];
+let chart = null, hoverX;
+function drawMain() {
+  const cv = $('ch-main');
   if (!cv.dataset.h) cv.dataset.h = cv.getAttribute('height');
-  const H = +cv.dataset.h;
-  const W = cv.clientWidth, dpr = window.devicePixelRatio || 1;
+  const H = +cv.dataset.h, W = cv.clientWidth, dpr = window.devicePixelRatio || 1;
   if (!W) return;
   cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
-  const g = cv.getContext('2d'); g.scale(dpr, dpr);
-  const data = S.history.filter(p => p[series[0].key] !== undefined);
-  const L = 50, R = 62, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
-  g.clearRect(0, 0, W, H);
-  if (data.length < 2) { g.fillStyle = css('--text-secondary'); g.fillText('En attente de données…', L, T + 20); return; }
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  g.font = '11px system-ui, sans-serif';
+  const data = S.history.filter(p => p.pv !== undefined);
+  const L = 54, R = 66, T = 6, B = 20, GAP = 16, pw = W - L - R;
+  if (data.length < 2) { g.fillStyle = css('--text-secondary'); g.fillText('En attente de données…', L, T + 20); chart = null; return; }
   const x0 = data[0].t, x1 = data[data.length - 1].t || x0 + 1e-6;
-  let lo = Infinity, hi = -Infinity;
-  data.forEach(p => series.forEach(s => { lo = Math.min(lo, p[s.key]); hi = Math.max(hi, p[s.key]); }));
-  if (power) { lo = Math.min(0, Math.floor(lo / 1000) * 1000); hi = Math.max(3500, Math.ceil(hi / 1000) * 1000); }
-  else { lo = Math.floor(lo / 5) * 5 - 5; hi = Math.ceil(hi / 5) * 5 + 5; }
   const X = t => L + (x1 === x0 ? 0 : (t - x0) / (x1 - x0)) * pw;
-  const Y = v => T + ph - (v - lo) / (hi - lo) * ph;
-  g.strokeStyle = css('--grid'); g.lineWidth = 1; g.fillStyle = css('--text-secondary');
-  g.font = '11px system-ui, sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
-  niceTicks(lo, hi, 4).forEach(v => {
-    g.strokeStyle = v === 0 && power ? css('--text-secondary') : css('--grid');
-    g.beginPath(); g.moveTo(L, Y(v) + .5); g.lineTo(L + pw, Y(v) + .5); g.stroke();
-    g.fillText(power ? (v / 1000).toLocaleString('fr-CH') + ' kW' : v.toLocaleString('fr-CH'), L - 6, Y(v));
-  });
-  g.textAlign = 'center'; g.textBaseline = 'top';
-  niceTicks(x0, x1, 5).forEach(t => { if (t >= x0 && t <= x1) g.fillText(fmtH(t), X(t), T + ph + 6); });
-  series.forEach(s => {
-    g.strokeStyle = s.color; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
-    data.forEach((p, i) => {
-      const x = X(p.t), y = Y(p[s.key]);
-      if (i === 0) g.moveTo(x, y);
-      else if (s.stepped) { g.lineTo(x, Y(data[i - 1][s.key])); g.lineTo(x, y); }
-      else g.lineTo(x, y);
+  const avail = H - T - B - GAP;
+  let top = T;
+  const panes = PANES().map(pn => {
+    const ph = avail * pn.h, y0 = top;
+    top += ph + GAP;
+    let lo = Infinity, hi = -Infinity;
+    data.forEach(p => pn.series.forEach(s => { lo = Math.min(lo, p[s.key]); hi = Math.max(hi, p[s.key]); }));
+    if (pn.power) { lo = Math.min(0, Math.floor(lo / 1000) * 1000); hi = Math.max(3500, Math.ceil(hi / 1000) * 1000); }
+    else { lo = Math.floor(lo / 5) * 5 - 2; hi = Math.ceil(hi / 5) * 5 + 2; }
+    const Y = v => y0 + ph - (v - lo) / (hi - lo) * ph;
+    // grille et graduations
+    g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillStyle = css('--text-secondary');
+    niceTicks(lo, hi, 3).forEach(v => {
+      g.strokeStyle = v === 0 && pn.power ? css('--text-secondary') : css('--grid'); g.lineWidth = 1;
+      g.beginPath(); g.moveTo(L, Math.round(Y(v)) + .5); g.lineTo(L + pw, Math.round(Y(v)) + .5); g.stroke();
+      g.fillText(pn.power ? (v / 1000).toLocaleString('fr-CH') + ' kW' : v.toLocaleString('fr-CH') + ' °C', L - 6, Y(v));
     });
-    g.stroke();
+    pn.series.forEach(s => {
+      g.strokeStyle = s.color; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
+      data.forEach((p, i) => {
+        const x = X(p.t), y = Y(p[s.key]);
+        if (i === 0) g.moveTo(x, y);
+        else if (s.stepped) { g.lineTo(x, Y(data[i - 1][s.key])); g.lineTo(x, y); }
+        else g.lineTo(x, y);
+      });
+      g.stroke();
+    });
+    // valeurs actuelles en bout de courbe, écartées de 13 px minimum
+    const last = data[data.length - 1];
+    const labs = pn.series.map(s => ({y: Y(last[s.key]), c: s.color, txt: pn.power ? fmtKW(last[s.key]) : fmt(last[s.key]) + ' °C'}))
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 13);
+    g.textAlign = 'left';
+    labs.forEach(l => { g.fillStyle = l.c; g.fillText(l.txt, L + pw + 6, Math.min(l.y, y0 + ph)); });
+    return {...pn, Y, y0, ph};
   });
-  const last = data[data.length - 1];
-  const labs = series.map(s => ({y: Y(last[s.key]), c: s.color, txt: power ? fmtKW(last[s.key]) : fmt(last[s.key]) + unit}))
-    .sort((a, b) => a.y - b.y);
-  for (let i = 1; i < labs.length; i++) labs[i].y = Math.max(labs[i].y, labs[i - 1].y + 13);
-  g.textAlign = 'left'; g.textBaseline = 'middle';
-  labs.forEach(l => { g.fillStyle = power ? l.c : css('--text-primary'); g.fillText(l.txt, L + pw + 6, l.y); });
-  const hv = charts[id] && charts[id].hover;
-  charts[id] = {X, Y, x0, x1, L, pw, T, ph, series, unit, data, power, hover: hv};
-  if (hv !== undefined) drawHover(id, hv);
+  g.textAlign = 'center'; g.textBaseline = 'top'; g.fillStyle = css('--text-secondary');
+  niceTicks(x0, x1, 6).forEach(t => { if (t >= x0 && t <= x1) g.fillText(fmtH(t), X(t), H - B + 6); });
+  chart = {X, x0, x1, L, pw, panes, data, T, H, B};
+  if (hoverX !== undefined) drawHover(hoverX);
 }
 const fmtKW = v => (v / 1000).toLocaleString('fr-CH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' kW';
 // heure simulée (h depuis le départ) -> heure du jour
 function fmtH(t) {
-  const start = new Date(S.sim_start);
-  const d = new Date(start.getTime() + t * 3600e3);
+  const d = new Date(new Date(S.sim_start).getTime() + t * 3600e3);
   return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 function niceTicks(a, b, n) {
@@ -255,27 +278,53 @@ function niceTicks(a, b, n) {
   const step = [1, 2, 5, 10].map(k => k * mag).find(s => s >= step0);
   const out = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(6)); return out;
 }
-function drawHover(id, mx) {
-  const c = charts[id]; if (!c || !c.data) return;
-  const cv = $(id), g = cv.getContext('2d');
+function drawHover(mx) {
+  const c = chart; if (!c) return;
+  const cv = $('ch-main'), g = cv.getContext('2d');
   const t = c.x0 + (mx - c.L) / c.pw * (c.x1 - c.x0);
   let best = c.data[0]; c.data.forEach(p => { if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p; });
   const x = c.X(best.t);
   g.strokeStyle = css('--text-secondary'); g.lineWidth = 1; g.setLineDash([3, 3]);
-  g.beginPath(); g.moveTo(x + .5, c.T); g.lineTo(x + .5, c.T + c.ph); g.stroke(); g.setLineDash([]);
-  c.series.forEach(s => { g.fillStyle = s.color; g.strokeStyle = css('--surface-1'); g.lineWidth = 2;
-    g.beginPath(); g.arc(x, c.Y(best[s.key]), 4, 0, 7); g.fill(); g.stroke(); });
-  const tip = $('tip-' + id);
-  tip.innerHTML = `<div class="muted">${fmtH(best.t)}</div>` + c.series.map(s =>
-    `<div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};margin-right:6px"></span>${s.name} : <b>${c.power ? fmtW(best[s.key]) : fmt(best[s.key]) + c.unit}</b></div>`).join('');
+  g.beginPath(); g.moveTo(x + .5, c.T); g.lineTo(x + .5, c.H - c.B); g.stroke(); g.setLineDash([]);
+  c.panes.forEach(pn => pn.series.forEach(s => {
+    g.fillStyle = s.color; g.strokeStyle = css('--surface-1'); g.lineWidth = 2;
+    g.beginPath(); g.arc(x, pn.Y(best[s.key]), 4, 0, 7); g.fill(); g.stroke();
+  }));
+  const dot = c => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:6px"></span>`;
+  const tip = $('tip-ch-main');
+  tip.innerHTML = `<div class="muted">${fmtH(best.t)}</div>` + c.panes.map(pn => pn.series.map(s =>
+    `<div>${dot(s.color)}${s.name} : <b>${pn.power ? fmtW(best[s.key]) : fmt(best[s.key]) + ' °C'}</b></div>`).join('')).join('');
   tip.style.display = 'block';
-  tip.style.left = Math.min(x + 12, cv.clientWidth - tip.offsetWidth - 4) + 'px'; tip.style.top = '8px';
+  tip.style.left = (x + 12 + tip.offsetWidth > cv.clientWidth ? x - tip.offsetWidth - 12 : x + 12) + 'px';
+  tip.style.top = '8px';
 }
-['ch-temp', 'ch-power'].forEach(id => {
-  const cv = $(id);
-  cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); charts[id] = charts[id] || {}; charts[id].hover = e.clientX - r.left; render(); });
-  cv.addEventListener('mouseleave', () => { if (charts[id]) delete charts[id].hover; $('tip-' + id).style.display = 'none'; render(); });
+$('ch-main').addEventListener('mousemove', e => { hoverX = e.clientX - $('ch-main').getBoundingClientRect().left; drawMain(); });
+$('ch-main').addEventListener('mouseleave', () => { hoverX = undefined; $('tip-ch-main').style.display = 'none'; drawMain(); });
+
+// ------------------------------------------------------------------ journée (onglets internes)
+document.querySelectorAll('[data-jtab]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-jtab]').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('[data-jpane]').forEach(x => x.hidden = x.dataset.jpane !== b.dataset.jtab);
 });
+
+// ------------------------------------------------------------------ tiroir « Réglages »
+function setDrawer(open) {
+  $('drawer').hidden = !open;
+  document.body.classList.toggle('drawer-open', open);
+  $('b-drawer').setAttribute('aria-expanded', open);
+  localStorage.setItem('askoheat-drawer', open ? '1' : '');
+  render();
+  setTimeout(render, 220);              // le contenu change de largeur : redessine le graphique
+}
+$('b-drawer').onclick = () => setDrawer($('drawer').hidden);
+$('b-drawer-close').onclick = () => setDrawer(false);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('drawer').hidden) setDrawer(false); });
+const dsecState = JSON.parse(localStorage.getItem('askoheat-dsec') || '{}');
+document.querySelectorAll('.dsec').forEach(d => {
+  if (d.dataset.dsec in dsecState) d.open = dsecState[d.dataset.dsec];
+  d.addEventListener('toggle', () => { dsecState[d.dataset.dsec] = d.open; localStorage.setItem('askoheat-dsec', JSON.stringify(dsecState)); });
+});
+document.addEventListener('tabshown', e => { if (e.detail !== 'sim' && !$('drawer').hidden) { $('drawer').hidden = true; document.body.classList.remove('drawer-open'); } });
 
 // ------------------------------------------------------------------ contrôles
 function slider(id, label, key) {
@@ -309,4 +358,5 @@ async function poll() {
 }
 window.addEventListener('resize', render);
 showTab(location.hash.slice(1) || 'sim');
+if (localStorage.getItem('askoheat-drawer') && innerWidth >= 1000 && (location.hash.slice(1) || 'sim') === 'sim') { $('drawer').hidden = false; document.body.classList.add('drawer-open'); }
 poll();

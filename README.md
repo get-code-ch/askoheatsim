@@ -24,14 +24,18 @@ En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le
 
 ## Interface web
 
-- **Simulation** : chauffe-eau, pilotage, compteur simulé, graphiques, profil du ménage, puisages du jour, bilans journaliers.
+- **Simulation** : tableau de bord sur un écran — bandeau de chiffres clés (températures, eau à 40 °C, corps de chauffe,
+  PV, maison, réseau, vitesse), chauffe-eau, pilotage, graphique combiné températures / puissances, journée simulée
+  (puisages, bilan, jours précédents). Les réglages (mesure d'injection, simulation, ménage et PV, entrées de
+  l'appareil, écriture de registre) sont dans le tiroir « ⚙ Réglages ».
 - **Échanges Modbus** : chaque transaction (requête ▶ en bleu, réponse ◀ en vert, exception en rouge), avec l'en-tête
   MBAP grisé et, à côté des octets bruts, chaque registre interprété (nom, valeur avec unité, flags d'état en clair,
-  float32, numéro de série). Filtres, pause, export texte. Les IP des clients ne sont pas
+  float32, numéro de série). Détail de la transaction sélectionnée au-dessus du tableau ; registres principaux et
+  journal du simulateur en dessous. Filtres, pause, export texte. Les IP des clients ne sont pas
   affichées (« client A », « client B »…), car la page est publique.
 - **Configuration Home Assistant** : les voies de pilotage de l'ASKOHEAT+ (320 injection, 319 consigne, 318 étage,
   0-10 V via Shelly) en accordéon, avec avantages et inconvénients (la voie choisie s'ouvre seule), les fonctions
-  autonomes de l'appareil, un générateur de package HA et le YAML dans une colonne masquable. Le package utilise le
+  autonomes de l'appareil, un générateur de package HA (Afficher / Copier / Télécharger) et le YAML dans une colonne masquable. Le package utilise le
   bloc gestionnaire d'énergie 300-336 (316 état, 317 puissance, 318-320 commandes, 325-334 sondes en float32).
   Basé sur la table Modbus Askoma v1.16 (13.05.2024).
 
