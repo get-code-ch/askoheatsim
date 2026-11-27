@@ -32,8 +32,8 @@ const fmt = (v, d = 1) => (+v).toLocaleString('fr-CH', {minimumFractionDigits: d
 const fmtW = v => Math.round(v).toLocaleString('fr-CH') + ' W';
 
 const REG_DESC = {
-  100: 'Sonde 1 (haut), °C', 102: 'Sonde 2, °C', 108: 'Mode secours (0/255)', 109: 'Flags d\'état (= 624)',
-  110: 'Puissance réelle, W', 200: 'Commande étage', 201: 'Consigne, W', 202: 'Injection, W',
+  316: 'État (= 109 / 624)', 317: 'Puissance réelle, W (= 110)', 318: 'Commande étage (= 200)',
+  319: 'Consigne, W (= 201)', 320: 'Injection, W (= 202)', 321: 'Mode secours (0/255)', 322: 'Contact PAC (0/255)',
   502: 'Entrées autorisées', 503: 'Arrêt après N min de chauffe', 504: 'Arrêt auto', 510: 'Temp. légionelles',
   595: 'Température minimale, °C', 626: 'Entrée qui pilote', 632: 'État des sondes', 639: 'Étage demandé par le 0-10 V'
 };
@@ -122,8 +122,8 @@ function render() {
 
   // Registres
   $('regs').innerHTML = Object.entries(S.registers).map(([a, v]) => {
-    let shown = [201, 202].includes(+a) ? s16(v) : v;
-    if ([109, 502, 504, 626, 632].includes(+a)) shown = bin(v, [109, 502].includes(+a) ? 16 : 8);
+    let shown = [319, 320].includes(+a) ? s16(v) : v;
+    if ([316, 502, 504, 626, 632].includes(+a)) shown = bin(v, [316, 502].includes(+a) ? 16 : 8);
     return `<tr><td>${a}</td><td class="muted">${REG_DESC[a] || ''}</td><td class="num"><code>${shown}</code></td></tr>`;
   }).join('');
 
@@ -132,10 +132,10 @@ function render() {
   if (document.activeElement !== comp) comp.checked = S.compensate;
   $('comp-explain').classList.toggle('off', !S.compensate);
   $('comp-explain').innerHTML = S.compensate
-    ? `<b>Cochée : mesure du compteur réel.</b> Home Assistant écrit dans le registre 202 la puissance mesurée par le gPlug (reçue en MQTT).
+    ? `<b>Cochée : mesure du compteur réel.</b> Home Assistant écrit dans le registre 320 (ou 202) la puissance mesurée par le gPlug (reçue en MQTT).
        Ce compteur ne voit pas le corps de chauffe simulé : le simulateur ajoute donc sa propre charge à la valeur reçue, comme si le compteur la voyait.
        Sans cela, il croirait le surplus toujours disponible et monterait à 3,5 kW.<div class="note">À utiliser en temps réel (×1) : Home Assistant écrit toutes les 10 s réelles.</div>`
-    : `<b>Décochée : mesure simulée.</b> Les écritures de Home Assistant dans le registre 202 sont ignorées (visibles dans l'onglet Échanges Modbus).
+    : `<b>Décochée : mesure simulée.</b> Les écritures de Home Assistant dans les registres 320 et 202 sont ignorées (visibles dans l'onglet Échanges Modbus).
        Le simulateur calcule lui-même la mesure au compteur : maison + corps de chauffe − production PV, à partir du profil du ménage.
        <div class="note">Fonctionne à toutes les vitesses. Les registres 200 et 201 écrits par HA restent pris en compte.</div>`;
   $('speed-note').textContent = S.compensate && S.speed > 1

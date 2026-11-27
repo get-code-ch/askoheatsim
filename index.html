@@ -121,7 +121,9 @@ canvas { width: 100%; display: block; }
 .trace th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; font-family: system-ui, sans-serif; }
 .trace td { white-space: nowrap; }
 .trace td.dec { white-space: normal; font-family: system-ui, sans-serif; min-width: 260px; }
-.trace .hex { display: block; padding: 1px 6px; border-radius: 4px; }
+.trace td.hx { white-space: normal; width: 430px; max-width: 430px; }
+.trace .hex { display: block; padding: 1px 6px; border-radius: 4px; margin: 1px 0; word-spacing: 0; }
+.trace .hex .b { white-space: nowrap; }
 .trace .rx { color: var(--rx); background: var(--rx-bg); }
 .trace .tx { color: var(--tx); background: var(--tx-bg); }
 .trace tr.exc .tx { color: var(--crit); background: var(--ex-bg); }
@@ -135,12 +137,31 @@ canvas { width: 100%; display: block; }
 .legend-trace { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; }
 .legend-trace span { padding: 1px 8px; border-radius: 4px; }
 .decode-box { font: 12.5px/1.6 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.trace .fld { font-size: 12.5px; line-height: 1.5; }
+.trace .fld.dim { opacity: .55; }
+.trace .fa { display: inline-block; min-width: 62px; color: var(--text-secondary); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; }
+.trace .fn { color: var(--text-secondary); }
+.trace .fh { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--text-secondary); margin-left: 4px; }
+.trace details summary { cursor: pointer; color: var(--series-1); font-size: 12px; }
 
 /* --------------------------------------------------------------- config */
-.cfg { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; padding: 16px 24px 32px; }
-@media (max-width: 1150px) { .cfg { grid-template-columns: 1fr; } }
-.opt { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface-1); }
-.opt h3 { margin: 0 0 4px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.cfg { display: grid; grid-template-columns: minmax(0, 1fr) 380px minmax(0, 560px); gap: 16px; padding: 16px 24px 32px; align-items: start; }
+.cfg.noyaml { grid-template-columns: minmax(0, 1fr) 400px; }
+.cfg.noyaml #cfg-yamlcol { display: none; }
+@media (max-width: 1450px) { .cfg { grid-template-columns: minmax(0, 1fr) 380px; } #cfg-yamlcol { grid-column: 1 / -1; position: static; } }
+@media (max-width: 900px) { .cfg, .cfg.noyaml { grid-template-columns: 1fr; } .cfg .sticky { position: static; } }
+.opt { border: 1px solid var(--border); border-radius: 10px; padding: 0; margin-bottom: 10px; background: var(--surface-1); }
+.opt > summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.opt > summary::-webkit-details-marker { display: none; }
+.opt > summary::before { content: "▸"; color: var(--text-secondary); transition: transform .15s; display: inline-block; }
+.opt[open] > summary::before { transform: rotate(90deg); }
+.opt > summary .t { font-weight: 600; }
+.opt > summary .s { flex-basis: 100%; padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); }
+.opt[open] > summary .s { display: none; }
+.opt .body { padding: 0 14px 12px 32px; }
+.opt.chosen { border-color: var(--text-primary); }
+.opt.chosen > summary .t::after { content: " · voie choisie"; font-weight: 500; color: var(--text-secondary); font-size: 12px; }
+.ghost { background: none; border-color: transparent; color: var(--text-secondary); padding: 4px 8px; }
 .opt .tag { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
 .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
 @media (max-width: 700px) { .pc { grid-template-columns: 1fr; } }
@@ -150,7 +171,7 @@ canvas { width: 100%; display: block; }
 .regs-line { font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
 code { font: 12.5px ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
 pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px; overflow: auto; max-height: 520px; margin: 8px 0 0; white-space: pre; }
+  border-radius: 8px; padding: 12px; overflow: auto; max-height: calc(100vh - 190px); margin: 8px 0 0; white-space: pre; }
 .warnbox { border-left: 3px solid var(--warn); padding: 6px 10px; margin: 8px 0; background: color-mix(in srgb, var(--warn) 10%, transparent); font-size: 13px; }
 .sticky { position: sticky; top: 12px; align-self: start; }
 .cfg-form label { margin-top: 8px; }
@@ -248,10 +269,10 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
         <div class="bar"><div id="wd-bar" style="width:0%"></div></div>
       </div>
       <dl class="kv" style="margin-top:14px">
-        <dt>Reg. 200 · étage</dt><dd id="c-step">—</dd>
-        <dt>Reg. 201 · consigne</dt><dd id="c-sp">—</dd>
-        <dt>Reg. 202 · injection utilisée</dt><dd id="c-fi">—</dd>
-        <dt>Dernière valeur reçue de HA (202)</dt><dd id="c-ha">—</dd>
+        <dt>Reg. 318 / 200 · étage</dt><dd id="c-step">—</dd>
+        <dt>Reg. 319 / 201 · consigne</dt><dd id="c-sp">—</dd>
+        <dt>Reg. 320 / 202 · injection utilisée</dt><dd id="c-fi">—</dd>
+        <dt>Dernière valeur reçue de HA (320 / 202)</dt><dd id="c-ha">—</dd>
       </dl>
     </section>
 
@@ -297,7 +318,7 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
 
   <div class="col">
     <section class="card">
-      <h2>Valeur d'injection (reg. 202)</h2>
+      <h2>Valeur d'injection (reg. 320 / 202)</h2>
       <label class="check"><input type="checkbox" id="i-comp">
         <span>La mesure envoyée n'inclut pas le corps de chauffe simulé (le simulateur ajoute sa propre charge)</span></label>
       <div class="switch-card" id="comp-explain"></div>
@@ -464,6 +485,17 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
   <div id="cfg-guide"></div>
   <div class="sticky">
     <section class="card cfg-form" id="cfg-form"></section>
+  </div>
+  <div class="sticky" id="cfg-yamlcol">
+    <section class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">askoheat.yaml</h2>
+        <span class="row"><button id="cfg-copy" class="primary">Copier</button><button class="ghost" id="cfg-hide" title="Masquer cette colonne">Masquer ✕</button></span>
+      </div>
+      <pre class="yaml" id="cfg-yaml"></pre>
+      <div class="note">À placer dans <code>config/packages/askoheat.yaml</code>, avec <code>homeassistant: packages: !include_dir_named packages</code> dans <code>configuration.yaml</code>.
+      Vérifiez dans Outils de développement → YAML, puis redémarrez HA (l'intégration Modbus ne se recharge pas à chaud).</div>
+    </section>
   </div>
 </section>
 

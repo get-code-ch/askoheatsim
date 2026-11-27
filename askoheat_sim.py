@@ -75,6 +75,7 @@ FEEDIN_REGS = (REG_FEEDIN, REG_EM_FEEDIN)
 WRITABLE = {REG_STEP, REG_SETPOINT, REG_FEEDIN, REG_EM_STEP, REG_EM_SETPOINT,
             REG_EM_FEEDIN, REG_INPUT_SETTING, REG_AUTO_OFF_MIN, REG_AUTO_OFF, REG_LEGIO, REG_MIN_TEMP}
 REG_SPACE = 1000
+SERIAL = os.environ.get("SERIAL", "ASKOHEAT-SIM-0001")[:31]   # registres 0-15 et 300-315 (char[32])
 
 # Bits du registre 502 (doc Askoma) : octet bas = entrées, octet haut bit 1 = température minimale
 IN_FEEDIN, IN_SETPOINT, IN_STEP, IN_ANALOG, IN_HP, IN_EMERG = 2, 3, 4, 5, 6, 7
@@ -397,6 +398,14 @@ class Simulator:
             return u16(round(sv[(a - 100) // 2 + 1]))
         if a == 108 or a == 321:
             return 255 if self.emergency() else 0
+        if 300 <= a <= 315 or 0 <= a <= 15:          # numéro de série, 2 caractères par mot
+            raw = SERIAL.encode("ascii", "replace").ljust(32, b"\0")
+            i = (a % 300) * 2
+            return raw[i] << 8 | raw[i + 1]
+        if a == 316:                                 # bloc EMA : état (= 624)
+            return self.status_flags()
+        if a == 317:                                 # bloc EMA : puissance (= 625)
+            return self.load_w
         if a == 322:
             return 255 if self.hp_request else 0
         if a in (323, 324):
@@ -413,8 +422,8 @@ class Simulator:
             return u16(self.cmd_setpoint)
         if a in FEEDIN_REGS:
             return u16(self.cmd_feedin)
-        if a == 325 or a == 326:                     # sonde 0 en float32
-            return f32_words(sv[0])[a - 325]
+        if 325 <= a <= 334:                          # bloc EMA : sondes 0..4 en float32
+            return f32_words(sv[(a - 325) // 2])[(a - 325) % 2]
         if a == REG_INPUT_SETTING:
             return self.input_setting
         if a == REG_AUTO_OFF_MIN:
@@ -549,7 +558,7 @@ class Simulator:
         if self.auto_off & 1 and self.last_cmd_write is not None:
             wd = max(0.0, WATCHDOG_S - (time.monotonic() - self.last_cmd_write))
         regs = {a: self.read_reg(a) for a in
-                (100, 102, 108, 109, 110, 200, 201, 202, 502, 503, 504, 510, 595, 626, 632, 639)}
+                (316, 317, 318, 319, 320, 321, 322, 502, 503, 504, 510, 595, 626, 632, 639)}
         now = self.house.now(self.sim_time)
         today = self.days.get(now.date().isoformat())
         return {

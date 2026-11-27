@@ -26,11 +26,14 @@ En local : `python3 askoheat_sim.py`, puis http://localhost:8080/ (Modbus sur le
 
 - **Simulation** : chauffe-eau, pilotage, compteur simulé, graphiques, profil du ménage, puisages du jour, bilans journaliers.
 - **Échanges Modbus** : chaque transaction (requête ▶ en bleu, réponse ◀ en vert, exception en rouge), avec l'en-tête
-  MBAP grisé, le décodage des registres, des filtres, une pause et un export texte. Les IP des clients ne sont pas
+  MBAP grisé et, à côté des octets bruts, chaque registre interprété (nom, valeur avec unité, flags d'état en clair,
+  float32, numéro de série). Filtres, pause, export texte. Les IP des clients ne sont pas
   affichées (« client A », « client B »…), car la page est publique.
-- **Configuration Home Assistant** : les voies de pilotage de l'ASKOHEAT+ (202 injection, 201 consigne, 200 étage,
-  0-10 V via Shelly) avec avantages et inconvénients, les fonctions autonomes de l'appareil, et un générateur de
-  package HA. Basé sur la table Modbus Askoma v1.16 (13.05.2024).
+- **Configuration Home Assistant** : les voies de pilotage de l'ASKOHEAT+ (320 injection, 319 consigne, 318 étage,
+  0-10 V via Shelly) en accordéon, avec avantages et inconvénients (la voie choisie s'ouvre seule), les fonctions
+  autonomes de l'appareil, un générateur de package HA et le YAML dans une colonne masquable. Le package utilise le
+  bloc gestionnaire d'énergie 300-336 (316 état, 317 puissance, 318-320 commandes, 325-334 sondes en float32).
+  Basé sur la table Modbus Askoma v1.16 (13.05.2024).
 
 L'état est unique et en mémoire : un réglage changé par un visiteur l'est pour tous, et tout est perdu au redémarrage du pod.
 
@@ -100,7 +103,10 @@ L'identifiant d'unité Modbus est omis : l'ASKOHEAT+ l'ignore.
 | 595 | température minimale | chauffe à pleine puissance sous la valeur − 3 °C (sonde de la bride) |
 | 100-106, 634-638, 706-715 | sondes | sonde 0 = bride (bas), sonde 1 = haut, 2-4 non branchées |
 | 108 / 321 | mode secours | 0 / 255 |
+| 300-315 / 0-15 | numéro de série (char[32]) | `SERIAL`, défaut `ASKOHEAT-SIM-0001` |
+| 316 / 317 | état / puissance (bloc EMA) | identiques à 624 / 625 |
 | 322, 323-324, 716-717 | contact PAC, tension 0-10 V | |
+| 325-334 | sondes 0 à 4 en float32 (bloc EMA) | sonde 0 = bride, sonde 1 = haut |
 | 109 / 624 | flags d'état | octet bas : bits 0-2 relais, 4 carte relais, 5 courant, 6 PAC, 7 secours ; octet haut : 1 0-10 V, 2 consigne, 3 injection, 4 arrêt auto, 6 limite de température |
 | 110 / 625 | puissance réelle en W | |
 | 626 | entrée qui pilote | bits 7 consigne, 6 injection, 5 secours, 4 PAC, 3 0-10 V, 2 étage, 0 température minimale |

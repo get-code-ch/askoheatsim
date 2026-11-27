@@ -3,15 +3,16 @@
 (() => {
   const OPTIONS = [
     {
-      id: 'feedin', title: 'Modbus · registre 202 « injection » (Power to Heat)', tag: 'recommandé avec un compteur', tagCls: 'ok',
-      how: `Home Assistant recopie toutes les 10 s la puissance mesurée au compteur (négative = injection) dans le registre 202.
-            L'ASKOHEAT+ choisit lui-même l'étage pour consommer le surplus. Bit 2 du registre 502.`,
+      id: 'feedin', title: 'Modbus · registre 320 « injection » (Power to Heat)', tag: 'recommandé avec un compteur', tagCls: 'ok',
+      short: 'HA transmet la mesure du compteur, l\'appareil régule seul.',
+      how: `Home Assistant recopie toutes les 10 s la puissance mesurée au compteur (négative = injection) dans le registre 320
+            du bloc gestionnaire d'énergie (identique au 202). L'ASKOHEAT+ choisit lui-même l'étage pour consommer le surplus. Bit 2 du registre 502.`,
       pros: [
         'Une seule automation dans HA : elle transmet la mesure, la régulation est dans l\'appareil',
         'Réagit à chaque écriture, sans boucle de régulation à mettre au point',
         'Valeur positive = soutirage : l\'appareil s\'arrête de lui-même',
         'Retour d\'état complet par la même liaison (températures, puissance, entrée active)',
-        'Sécurité : sans écriture pendant 60 s, les registres 200-202 sont effacés (504 bit 0)',
+        'Sécurité : sans écriture pendant 60 s, les commandes 318-320 (et 200-202) sont effacées (504 bit 0)',
       ],
       cons: [
         'Pas de réserve, de priorité ni d\'horaire côté HA : l\'appareil prend tout le surplus disponible',
@@ -20,16 +21,17 @@
         'Dépend de HA, du réseau et du compteur : panne = plus de chauffe solaire (mais arrêt sûr)',
         'Disponible depuis le firmware 4.2.1',
       ],
-      regs: '202 (int16, −30000…30000 W) · 502 bit 2 · 504 bit 0/1 · 539 délai d\'enclenchement · 597 limite de température',
+      regs: '320 = 202 (int16, −30000…30000 W, fonction 6) · lecture 316 état, 317 puissance, 325-334 sondes · 502 bit 2 · 504 bit 0/1 · 539 délai · 597 limite de température',
     },
     {
-      id: 'setpoint', title: 'Modbus · registre 201 « consigne de puissance »', tag: 'le plus de contrôle', tagCls: 'warn',
-      how: `Home Assistant calcule la puissance à donner au corps de chauffe (surplus − réserve) et l'écrit en W dans le registre 201.
-            L'appareil prend l'étage inférieur ou égal à la consigne. Bit 3 du registre 502.`,
+      id: 'setpoint', title: 'Modbus · registre 319 « consigne de puissance »', tag: 'le plus de contrôle', tagCls: 'warn',
+      short: 'HA calcule la puissance à donner, avec réserve et priorités.',
+      how: `Home Assistant calcule la puissance à donner au corps de chauffe (surplus − réserve) et l'écrit en W dans le registre 319
+            (identique au 201). L'appareil prend l'étage inférieur ou égal à la consigne. Bit 3 du registre 502.`,
       pros: [
         'Réserve d\'injection, puissance minimale, horaires et priorités réglables dans HA',
         'Se coordonne avec les autres charges (voiture, batterie, pompe à chaleur)',
-        'Même retour d\'état et même sécurité watchdog que le 202',
+        'Même retour d\'état et même sécurité watchdog que le 320',
         'La consigne peut venir d\'autre chose que du PV (tarif, prévision météo, prix dynamique)',
       ],
       cons: [
@@ -37,11 +39,12 @@
         'Consigne minimale de 250 W (doc Askoma) ; paliers de 500 W',
         'Boucle plus lente : HA lit la puissance, calcule, puis écrit',
       ],
-      regs: '201 (int16, 250…30000 W) · 502 bit 3 · 504 bit 0/1 · 597 limite de température',
+      regs: '319 = 201 (int16, 250…30000 W, fonction 6) · 502 bit 3 · 504 bit 0/1 · 597 limite de température',
     },
     {
-      id: 'step', title: 'Modbus · registre 200 « étage »', tag: 'manuel / scénarios', tagCls: '',
-      how: `Home Assistant impose directement l'étage 0 à 7 (bits 0-2 = résistances 1 à 3). Bit 4 du registre 502.`,
+      id: 'step', title: 'Modbus · registre 318 « étage »', tag: 'manuel / scénarios', tagCls: '',
+      short: 'HA impose l\'étage : tests, bouton « boost », scénarios.',
+      how: `Home Assistant impose directement l'étage 0 à 7 dans le registre 318 (identique au 200 ; bits 0-2 = résistances 1 à 3). Bit 4 du registre 502.`,
       pros: [
         'Contrôle total et prévisible : idéal pour les tests, un bouton « boost » ou un scénario horaire',
         'Indépendant de toute mesure de compteur',
@@ -49,12 +52,13 @@
       cons: [
         'Aucune régulation automatique sur le surplus',
         'L\'étage doit être réécrit au moins toutes les 60 s si le watchdog est actif',
-        'Une entrée 0-10 V active a la priorité sur le registre 200',
+        'Une entrée 0-10 V active a la priorité sur le registre 318 / 200',
       ],
-      regs: '200 (bits 0-2) · 502 bit 4 · 596 limite de température',
+      regs: '318 = 200 (bits 0-2, fonction 6) · 502 bit 4 · 596 limite de température',
     },
     {
       id: 'analog', title: 'Entrée 0-10 V (par ex. Shelly Pro Dimmer 0/1-10V)', tag: 'sans Modbus pour piloter', tagCls: '',
+      short: 'Un module 0-10 V commandé par HA fournit la consigne en tension.',
       how: `Un module 0-10 V (Shelly) commandé par HA fournit une tension à l'entrée analogique de l'ASKOHEAT+.
             L'appareil traduit la tension en étage avec 8 seuils réglables (registres 556-589). Bit 5 du registre 502.
             HA règle la luminosité du Shelly comme une consigne de puissance.`,
@@ -71,7 +75,7 @@
         'Pas de retour d\'état sans Modbus en plus',
         'Dans ce simulateur, l\'entrée 0-10 V est un curseur : HA ne peut pas la commander',
       ],
-      regs: '502 bit 5 · seuils 556-589 · 639 étage calculé · 716-717 tension mesurée · 504 bit 5',
+      regs: '502 bit 5 · seuils 556-589 · lecture 323-324 tension mesurée (float32), 316 état · 504 bit 5',
     },
   ];
 
@@ -86,6 +90,7 @@
   ];
 
   const MATRIX = [
+    ['Registre écrit', '320', '319', '318', 'aucun (Shelly)'],
     ['Logique dans HA', 'minimale', 'régulation', 'scénarios', 'régulation'],
     ['Réserve / priorités', 'non', 'oui', 'manuel', 'oui'],
     ['Matériel en plus', 'non', 'non', 'non', 'module 0-10 V'],
@@ -102,53 +107,67 @@
     reserve: 100, minimum: 500, light: 'light.chauffe_eau',
   };
   let C = {...DEFAULTS, ...JSON.parse(localStorage.getItem('askoheat-cfg') || '{}')};
+  let openedFor = null;
 
   function guideHtml() {
-    const opt = o => `<div class="opt" id="opt-${o.id}">
-      <h3>${o.title} ${o.tag ? `<span class="tag ${o.tagCls}">${o.tag}</span>` : ''}</h3>
+    const opt = o => `<details class="opt" id="opt-${o.id}">
+      <summary><span class="t">${o.title}</span> ${o.tag ? `<span class="tag ${o.tagCls}">${o.tag}</span>` : ''}<span class="s">${o.short}</span></summary>
+      <div class="body">
       <div>${o.how}</div>
       <div class="pc">
         <div><h4 class="ok">Avantages</h4><ul>${o.pros.map(p => `<li>${p}</li>`).join('')}</ul></div>
         <div><h4 class="crit">Inconvénients</h4><ul>${o.cons.map(p => `<li>${p}</li>`).join('')}</ul></div>
       </div>
       <div class="regs-line">Registres : ${o.regs}</div>
-      <div style="margin-top:8px"><button data-use="${o.id}">Générer la configuration</button></div>
-    </div>`;
+      <div style="margin-top:8px"><button data-use="${o.id}">Choisir cette voie</button></div>
+      </div>
+    </details>`;
     return `<section class="card">
       <h2>Piloter l'ASKOHEAT+ 2.0 depuis Home Assistant</h2>
       <p style="margin-top:0">L'appareil accepte plusieurs entrées de commande, activées bit par bit dans le registre <code>502</code>.
       Quatre voies se prêtent à Home Assistant. Elles peuvent coexister ; quand plusieurs sont actives, l'appareil applique sa propre priorité
-      (la documentation précise seulement que secours et contact PAC passent avant le registre 200, et que le 0-10 V l'emporte sur le 200).</p>
-      <table class="matrix"><thead><tr><th></th><th>202 injection</th><th>201 consigne</th><th>200 étage</th><th>0-10 V</th></tr></thead>
+      (la documentation précise seulement que secours et contact PAC passent avant le registre 200, et que le 0-10 V l'emporte sur le 200).
+      Le générateur utilise le <b>bloc gestionnaire d'énergie 300-336</b> : état, puissance, températures et commandes au même endroit,
+      les registres 318-320 étant identiques à 200-202. Cliquez une voie pour voir le détail ; celle choisie dans le générateur s'ouvre seule.</p>
+      <table class="matrix"><thead><tr><th></th><th>Injection</th><th>Consigne</th><th>Étage</th><th>0-10 V</th></tr></thead>
       <tbody>${MATRIX.map(r => `<tr><th>${r[0]}</th>${r.slice(1).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>
     </section>
     <div style="margin-top:16px">${OPTIONS.map(opt).join('')}</div>
-    <section class="card">
-      <h2>Fonctions autonomes de l'appareil</h2>
+    <details class="opt">
+      <summary><span class="t">Fonctions autonomes de l'appareil</span><span class="s">Température minimale, heures creuses, légionelles, contact PAC, secours, SMA SEMP…</span></summary>
+      <div class="body">
       <p style="margin-top:0">Elles fonctionnent sans Home Assistant et se combinent avec les voies ci-dessus.</p>
       <table><thead><tr><th>Fonction</th><th>Registres</th><th>Effet</th></tr></thead>
       <tbody>${AUTONOMOUS.map(r => `<tr><td><b>${r[0]}</b></td><td><code>${r[1]}</code></td><td>${r[2]}</td></tr>`).join('')}</tbody></table>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <h2>Bonnes pratiques Modbus</h2>
+      </div>
+    </details>
+    <details class="opt">
+      <summary><span class="t">Bonnes pratiques Modbus</span><span class="s">Fréquence d'interrogation, watchdog, codes de fonction, bloc 300-336…</span></summary>
+      <div class="body">
       <ul style="margin:0;padding-left:18px">
+        <li>Bloc gestionnaire d'énergie 300-336 (fonction 4, 37 registres) : 300-315 numéro de série, 316 état, 317 puissance,
+            318-320 commandes (écriture en fonction 6), 321 secours, 322 contact PAC, 323-334 tension 0-10 V et sondes 0-4 en float32.
+            Une intégration peut tout lire en une seule requête ; l'intégration Modbus de HA fait une lecture par capteur.</li>
         <li>L'appareil met ses valeurs à jour chaque seconde : interroger plus vite n'apporte rien. 5-10 s suffisent.</li>
         <li>Écrire la commande toutes les 10 s : bien en dessous des 60 s du watchdog, même si une écriture échoue.</li>
         <li>Fonctions 3/6 pour 200-202 et 500-555 (holding), fonction 4 pour 100-109, 300-336, 600-698 et 700-758 (input).</li>
         <li>8 connexions simultanées au maximum. L'identifiant d'unité est ignoré.</li>
-        <li>Les valeurs négatives (201/202) s'écrivent en complément à deux : <code>valeur % 65536</code>.</li>
+        <li>Les valeurs négatives (319/320, 201/202) s'écrivent en complément à deux : <code>valeur % 65536</code>.</li>
         <li>Pas d'authentification : gardez le port 502 dans un réseau de confiance.</li>
         <li>Non documenté, à vérifier sur l'appareil : ordre des mots des float32 (supposé mot fort en premier), priorité exacte entre entrées.</li>
       </ul>
-    </section>`;
+      </div>
+    </details>`;
   }
 
   function formHtml() {
     const opt = (v, t) => `<option value="${v}">${t}</option>`;
-    return `<h2>Générateur de package Home Assistant</h2>
+    return `<div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <h2 style="margin:0">Générateur de package Home Assistant</h2>
+        <button class="ghost" id="cfg-show" hidden>Afficher le YAML</button></div>
       <div class="grid2">
         <div><label>Voie de pilotage</label><select data-c="mode">
-          ${opt('feedin', '202 injection')}${opt('setpoint', '201 consigne')}${opt('step', '200 étage')}${opt('analog', '0-10 V (Shelly)')}</select></div>
+          ${opt('feedin', '320 injection')}${opt('setpoint', '319 consigne')}${opt('step', '318 étage')}${opt('analog', '0-10 V (Shelly)')}</select></div>
         <div><label>Cible</label><select data-c="target">${opt('real', 'appareil réel')}${opt('sim', 'ce simulateur')}</select></div>
       </div>
       <label>Adresse de l'ASKOHEAT+</label><input type="text" data-c="host">
@@ -184,13 +203,7 @@
       </div>
       <div id="cfg-warn"></div>
       <div id="cfg-regs" class="note"></div>
-      <div class="row" style="margin-top:10px;justify-content:space-between">
-        <b>askoheat.yaml</b>
-        <span class="row"><button id="cfg-reset">Valeurs par défaut</button><button class="primary" id="cfg-copy">Copier</button></span>
-      </div>
-      <pre class="yaml" id="cfg-yaml"></pre>
-      <div class="note">À placer dans <code>config/packages/askoheat.yaml</code>, avec <code>homeassistant: packages: !include_dir_named packages</code> dans <code>configuration.yaml</code>.
-      Vérifiez ensuite dans Outils de développement → YAML, puis redémarrez HA (l'intégration Modbus ne se recharge pas à chaud).</div>`;
+      <div class="row" style="margin-top:10px"><button id="cfg-reset">Valeurs par défaut</button></div>`;
   }
 
   // ---------------------------------------------------------------- génération
@@ -244,16 +257,17 @@
       extra.forEach(e => L.push('        ' + e));
     };
     const temp = ['unit_of_measurement: "°C"', 'device_class: temperature', 'state_class: measurement', 'scan_interval: 10'];
-    sensor('Askoheat température haut', 'askoheat_temp_haut', 100, 'input', 'uint16', temp);
-    sensor('Askoheat température bride', 'askoheat_temp_bride', 714, 'input', 'float32', ['precision: 1', ...temp]);
-    sensor('Askoheat puissance', 'askoheat_puissance', 110, 'input', 'uint16',
+    // Bloc gestionnaire d'énergie (EMA) 300-336, lu en fonction 4 (input)
+    sensor('Askoheat température bride', 'askoheat_temp_bride', 325, 'input', 'float32', ['precision: 1', ...temp]);   // sonde 0
+    sensor('Askoheat température haut', 'askoheat_temp_haut', 327, 'input', 'float32', ['precision: 1', ...temp]);     // sonde 1
+    sensor('Askoheat puissance', 'askoheat_puissance', 317, 'input', 'uint16',
       ['unit_of_measurement: W', 'device_class: power', 'state_class: measurement', 'scan_interval: 5']);
-    sensor('Askoheat état', 'askoheat_etat', 109, 'input', 'uint16', ['scan_interval: 5']);
-    sensor('Askoheat entrée active', 'askoheat_entree_active', 626, 'input', 'uint16', ['scan_interval: 10']);
-    if (C.mode === 'feedin') sensor('Askoheat injection reçue', 'askoheat_injection_recue', 202, 'holding', 'int16', ['unit_of_measurement: W', 'scan_interval: 10']);
-    if (C.mode === 'setpoint') sensor('Askoheat consigne', 'askoheat_consigne', 201, 'holding', 'int16', ['unit_of_measurement: W', 'scan_interval: 10']);
-    if (C.mode === 'step') sensor('Askoheat étage commandé', 'askoheat_etage_commande', 200, 'holding', 'uint16', ['scan_interval: 10']);
-    if (C.mode === 'analog') sensor('Askoheat étage 0-10 V', 'askoheat_etage_analogique', 639, 'input', 'uint16', ['scan_interval: 10']);
+    sensor('Askoheat état', 'askoheat_etat', 316, 'input', 'uint16', ['scan_interval: 5']);
+    if (C.mode === 'feedin') sensor('Askoheat injection reçue', 'askoheat_injection_recue', 320, 'input', 'int16', ['unit_of_measurement: W', 'scan_interval: 10']);
+    if (C.mode === 'setpoint') sensor('Askoheat consigne', 'askoheat_consigne', 319, 'input', 'int16', ['unit_of_measurement: W', 'scan_interval: 10']);
+    if (C.mode === 'step') sensor('Askoheat étage commandé', 'askoheat_etage_commande', 318, 'input', 'uint16', ['scan_interval: 10']);
+    if (C.mode === 'analog') sensor('Askoheat tension 0-10 V', 'askoheat_tension_analogique', 323, 'input', 'float32',
+      ['precision: 2', 'unit_of_measurement: V', 'device_class: voltage', 'scan_interval: 10']);
 
     // Aides
     L.push('');
@@ -299,9 +313,12 @@
     L.push(`      - name: ${q('Askoheat pilotée par')}`);
     L.push('        unique_id: askoheat_pilotee_par');
     L.push('        state: >-');
-    L.push("          {% set v = states('sensor.askoheat_entree_active') | int(0) %}");
-    L.push("          {% set names = {128: 'consigne (201)', 64: 'injection (202)', 32: 'secours', 16: 'contact PAC', 8: 'entrée 0-10 V', 4: 'étage (200)', 2: 'heures creuses', 1: 'température minimale'} %}");
-    L.push("          {{ names.get(v % 256, 'aucune') }}");
+    // déduit des flags du registre 316 (= 624)
+    L.push("          {% set v = states('sensor.askoheat_etat') | int(0) %}");
+    L.push("          {% if v // 128 % 2 %}secours{% elif v // 64 % 2 %}contact PAC");
+    L.push("          {% elif v // 512 % 2 %}entrée 0-10 V{% elif v // 1024 % 2 %}consigne (319)");
+    L.push("          {% elif v // 2048 % 2 %}injection (320){% elif v % 8 %}étage (318) ou température minimale");
+    L.push("          {% else %}aucune{% endif %}");
     L.push('  - binary_sensor:');
     L.push(`      - name: ${q('Askoheat limite de température')}`);
     L.push('        unique_id: askoheat_limite_temperature');
@@ -336,25 +353,25 @@
 
     if (C.mode === 'feedin') {
       L.push('  - id: askoheat_injection');
-      L.push(`    alias: ${q('ASKOHEAT – envoyer la mesure du compteur (202)')}`);
+      L.push(`    alias: ${q('ASKOHEAT – envoyer la mesure du compteur (320)')}`);
       trig();
       L.push('    conditions:');
       L.push('      - condition: state\n        entity_id: input_boolean.askoheat_pv\n        state: "on"');
       L.push(`      - condition: template\n        value_template: ${q("{{ has_value('sensor.askoheat_reseau') }}")}`);
       L.push('    actions:');
-      write(202, ["{% set p = states('sensor.askoheat_reseau') | int(0) %}",
+      write(320, ["{% set p = states('sensor.askoheat_reseau') | int(0) %}",
                   '{{ ([[-30000, p] | max, 30000] | min) % 65536 }}']);
       L.push('  - id: askoheat_injection_off');
       L.push(`    alias: ${q('ASKOHEAT – arrêt du pilotage PV')}`);
       L.push('    triggers:\n      - trigger: state\n        entity_id: input_boolean.askoheat_pv\n        to: "off"');
       L.push('    actions:');
-      write(202, ['0']);
+      write(320, ['0']);
     }
     if (C.mode === 'setpoint' || C.mode === 'analog') {
       const cur = C.mode === 'setpoint' ? "states('sensor.askoheat_puissance') | float(0)"
         : `(state_attr('${C.light}', 'brightness') | int(0)) / 255 * 3500 if is_state('${C.light}', 'on') else 0`;
       L.push('  - id: askoheat_regulation');
-      L.push(`    alias: ${q(C.mode === 'setpoint' ? 'ASKOHEAT – consigne sur le surplus (201)' : 'ASKOHEAT – consigne 0-10 V sur le surplus')}`);
+      L.push(`    alias: ${q(C.mode === 'setpoint' ? 'ASKOHEAT – consigne sur le surplus (319)' : 'ASKOHEAT – consigne 0-10 V sur le surplus')}`);
       trig();
       L.push('    conditions:');
       L.push('      - condition: state\n        entity_id: input_boolean.askoheat_pv\n        state: "on"');
@@ -367,7 +384,7 @@
       L.push(`          minimum: ${q("{{ [states('input_number.askoheat_minimum') | float(0), 250] | max }}")}`);
       L.push(`          target: ${q('{{ [[current - grid - reserve, 0] | max, 3500] | min }}')}`);
       if (C.mode === 'setpoint') {
-        write(201, ['{{ (target | int) if target >= minimum else 0 }}']);
+        write(319, ['{{ (target | int) if target >= minimum else 0 }}']);
       } else {
         L.push('      - choose:');
         L.push(`          - conditions: ${q('{{ target < minimum }}')}`);
@@ -384,7 +401,7 @@
       L.push(`    alias: ${q('ASKOHEAT – arrêt du pilotage PV')}`);
       L.push('    triggers:\n      - trigger: state\n        entity_id: input_boolean.askoheat_pv\n        to: "off"');
       L.push('    actions:');
-      if (C.mode === 'setpoint') write(201, ['0']);
+      if (C.mode === 'setpoint') write(319, ['0']);
       else L.push(`      - action: light.turn_off\n        target:\n          entity_id: ${C.light}`);
       if (C.mode === 'analog') {
         L.push('  - id: askoheat_compteur_perdu');
@@ -395,17 +412,17 @@
     }
     if (C.mode === 'step') {
       L.push('  - id: askoheat_etage');
-      L.push(`    alias: ${q('ASKOHEAT – étage manuel (200)')}`);
+      L.push(`    alias: ${q('ASKOHEAT – étage manuel (318)')}`);
       trig();
       L.push('    conditions:');
       L.push('      - condition: state\n        entity_id: input_boolean.askoheat_pv\n        state: "on"');
       L.push('    actions:');
-      write(200, ["{{ states('input_number.askoheat_etage') | int(0) }}"]);
+      write(318, ["{{ states('input_number.askoheat_etage') | int(0) }}"]);
       L.push('  - id: askoheat_etage_off');
       L.push(`    alias: ${q('ASKOHEAT – arrêt du pilotage manuel')}`);
       L.push('    triggers:\n      - trigger: state\n        entity_id: input_boolean.askoheat_pv\n        to: "off"');
       L.push('    actions:');
-      write(200, ['0']);
+      write(318, ['0']);
     }
     if (C.writecfg) {
       L.push('  - id: askoheat_configuration');
@@ -443,7 +460,7 @@
       w.push('warn', 'Le simulateur n\'a pas de Shelly : son entrée 0-10 V se règle avec le curseur de l\'onglet Simulation. Le package sert ici à tester la logique avec le vrai module.');
     if (C.mintemp) w.push('warn', `Température minimale à ${C.mintempv} °C : l'appareil chauffe aussi sur le réseau (la nuit, en hiver) pour la maintenir.`);
     if (C.writecfg && C.target === 'real')
-      w.push('warn', 'Écrire 502/504 modifie la configuration de l\'appareil réel. Notez d\'abord les valeurs actuelles (page /expert ou /getall de l\'ASKOHEAT+). Vérifiez aussi que le firmware connaît la voie choisie (202 : 4.2.1 ou plus).');
+      w.push('warn', 'Écrire 502/504 modifie la configuration de l\'appareil réel. Notez d\'abord les valeurs actuelles (page /expert ou /getall de l\'ASKOHEAT+). Vérifiez aussi que le firmware connaît la voie choisie (320 / 202 : 4.2.1 ou plus).');
     if (C.mode === 'analog')
       w.push('warn', 'Faites correspondre les seuils de l\'entrée 0-10 V (registres 556-589) à la sortie du module : par exemple 1,4 V par étage pour 0-10 V = 0-3,5 kW.');
     let html = '';
@@ -468,7 +485,12 @@
     form.querySelectorAll('[data-show]').forEach(el => el.hidden = !show[el.dataset.show]);
     form.querySelector('[data-c="host"]').previousElementSibling.hidden = form.querySelector('[data-c="host"]').hidden = C.target !== 'real';
     form.querySelector('[data-c="simhost"]').previousElementSibling.hidden = form.querySelector('[data-c="simhost"]').hidden = C.target !== 'sim';
-    document.querySelectorAll('.opt').forEach(o => o.style.borderColor = o.id === 'opt-' + C.mode ? 'var(--text-primary)' : '');
+    if (C.mode !== openedFor) {                      // la voie choisie s'ouvre, les autres se ferment
+      OPTIONS.forEach(o => { const el = $('opt-' + o.id); el.open = o.id === C.mode; el.classList.toggle('chosen', o.id === C.mode); });
+      openedFor = C.mode;
+    }
+    $('tab-config').classList.toggle('noyaml', !!C.hideYaml);
+    $('cfg-show').hidden = !C.hideYaml;
     $('cfg-yaml').textContent = yaml();
     warnings();
     localStorage.setItem('askoheat-cfg', JSON.stringify(C));
@@ -487,9 +509,10 @@
     const b = e.target.closest('[data-use]');
     if (!b) return;
     C.mode = b.dataset.use; sync();
-    $('cfg-form').scrollIntoView({behavior: 'smooth', block: 'start'});
   });
-  $('cfg-reset').onclick = () => { C = {...DEFAULTS}; sync(); };
+  $('cfg-reset').onclick = () => { C = {...DEFAULTS, hideYaml: C.hideYaml}; sync(); };
+  $('cfg-hide').onclick = () => { C.hideYaml = true; sync(); };
+  $('cfg-show').onclick = () => { C.hideYaml = false; sync(); };
   $('cfg-copy').onclick = async () => {
     try { await navigator.clipboard.writeText($('cfg-yaml').textContent); $('cfg-copy').textContent = 'Copié'; }
     catch (e) { const r = document.createRange(); r.selectNodeContents($('cfg-yaml')); getSelection().removeAllRanges(); getSelection().addRange(r); $('cfg-copy').textContent = 'Sélectionné : Ctrl+C'; }
