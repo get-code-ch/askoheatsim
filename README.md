@@ -60,8 +60,7 @@ choisit d'où vient la mesure :
 
 Préréglages (couple, famille de 3, famille de 5, retraités) et réglages fins : adultes, enfants, type et durée de douche,
 bains par semaine, douches le soir, mode de vie (heure du lever, week-end), télétravail, lave-vaisselle / lave-linge
-raccordés à l'eau chaude, vacances, jardin (pompe d'arrosage ou de piscine : électricité seulement, l'arrosage est à
-l'eau froide), PV (kWc, orientation, météo) et consommation de base.
+raccordés à l'eau chaude, vacances, PV (kWc, orientation, météo) et consommation de base.
 
 Les puisages sont tirés au hasard avec une graine fixe : un même jour simulé donne les mêmes puisages, quelle que soit
 la vitesse. Le débit est demandé à 40 °C au robinet ; le chauffe-eau ne fournit que la part chaude du mélange. Quand

@@ -46,7 +46,6 @@ DEFAULT_PROFILE = {
     "homeoffice": False,      # présence en journée (repas de midi, consommation)
     "weekend_late": True,     # lever 1 h 30 plus tard le week-end
     "away": False,            # vacances : plus de puisages, consommation de veille
-    "garden": "aucun",        # aucun / arrosage / piscine
     # Variante maison + PV (utilisée quand le simulateur fournit lui-même la valeur d'injection)
     "pv_kwp": 10.0,
     "pv_orientation": "sud",  # sud / est-ouest
@@ -59,7 +58,7 @@ INT_KEYS = {"adults": (0, 8), "children": (0, 8), "shower_min": (2, 30), "baths_
             "base_w": (0, 3000), "seed": (0, 999999)}
 FLOAT_KEYS = {"evening_share": (0.0, 1.0), "pv_kwp": (0.0, 30.0)}
 BOOL_KEYS = {"enabled", "dishwasher_hot", "washer_hot", "homeoffice", "weekend_late", "away"}
-CHOICES = {"shower": set(SHOWER_LPM), "lifestyle": set(WAKE), "garden": {"aucun", "arrosage", "piscine"},
+CHOICES = {"shower": set(SHOWER_LPM), "lifestyle": set(WAKE),
            "pv_orientation": {"sud", "est-ouest"}, "weather": {"soleil", "variable", "couvert"},
            "preset": set(PRESETS) | {"perso"}}
 
@@ -189,13 +188,6 @@ class Household:
             add_load(17.5, 330, 250, "soirée")
             if home_day:
                 add_load(8.5, 540, 150, "présence en journée")
-        # Jardin : l'arrosage est fait à l'eau froide, seule la pompe consomme de l'électricité
-        summer = dt.month in (5, 6, 7, 8, 9)
-        if p["garden"] == "piscine" and summer:
-            add_load(10, 480, 750, "pompe de piscine")
-        if p["garden"] == "arrosage" and summer and not p["away"]:
-            add_load(20.5, 45, 600, "pompe d'arrosage")
-
         # Nuages : un facteur toutes les 10 min, interpolé
         clouds = [rnd.random() for _ in range(24 * 6 + 1)]
         day = {"draws": sorted(draws), "loads": loads, "clouds": clouds}
