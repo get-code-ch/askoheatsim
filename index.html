@@ -93,6 +93,8 @@ nav.tabs button:hover { border-color: var(--border); }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @media (max-width: 600px) {
   .kpi-actions { flex-wrap: wrap; width: 100%; }
+  nav.tabs { overflow-x: auto; scrollbar-width: none; padding: 8px 12px 0; }
+  nav.tabs button { white-space: nowrap; flex: none; padding-left: 12px; padding-right: 12px; }
   .kpi-actions > * { flex: 1 1 auto; }
 }
 @media (max-width: 600px) { .simdash { padding: 12px; } .kpis { gap: 6px 14px; } .kpi b { font-size: 17px; } .kv2 { grid-template-columns: auto 1fr; } }
@@ -202,6 +204,21 @@ canvas { width: 100%; display: block; }
 .trace .fh { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--text-secondary); margin-left: 4px; }
 .trace details summary { cursor: pointer; color: var(--series-1); font-size: 12px; }
 
+/* --------------------------------------------------------------- historique */
+.hist-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 16px; }
+.hist .kpis { padding: 10px 16px; }
+.hist .kpi small { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.hist-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1100px) { .hist-row { grid-template-columns: minmax(0, 1fr); } }
+.hist-table { overflow-x: auto; }
+.kv-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.kv-table th, .kv-table td { padding: 4px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+.kv-table th:first-child, .kv-table td:first-child { text-align: left; }
+.kv-table th { color: var(--text-secondary); font-weight: 600; font-size: 11.5px; }
+.kv-table tr.today td { font-style: italic; color: var(--text-secondary); }
+.legend span.sw::before { height: 10px; width: 10px; border-radius: 3px; }
+@media (max-width: 600px) { .wide { padding: 12px; } .hist-bar .note { margin-left: 0 !important; } }
+
 /* --------------------------------------------------------------- config */
 .cfg table { display: block; max-width: 100%; overflow-x: auto; }
 .cfg { display: grid; grid-template-columns: minmax(0, 1fr) 380px minmax(0, 560px); gap: 16px; padding: 16px 24px 32px; align-items: start; }
@@ -254,6 +271,7 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
 </header>
 <nav class="tabs" role="tablist">
   <button role="tab" data-tab="sim" aria-selected="true">Simulation</button>
+  <button role="tab" data-tab="hist" aria-selected="false">Historique</button>
   <button role="tab" data-tab="trace" aria-selected="false">Échanges Modbus <span class="muted" id="tab-count"></span></button>
   <button role="tab" data-tab="config" aria-selected="false">Configuration Home Assistant</button>
 </nav>
@@ -499,6 +517,41 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
   </div>
 </aside>
 
+<!-- ================================================================ Historique -->
+<section class="tab wide hist" id="tab-hist" hidden>
+  <div class="card hist-bar">
+    <div class="seg" role="radiogroup" aria-label="Période">
+      <button data-hdays="2" aria-selected="false">2 jours</button>
+      <button data-hdays="7" aria-selected="true">7 jours</button>
+      <button data-hdays="14" aria-selected="false">14 jours</button>
+    </div>
+    <span class="muted" id="h-range"></span>
+    <span class="note" style="margin:0 0 0 auto">Temps simulé · un point par quart d'heure · 14 jours conservés</span>
+  </div>
+  <div class="card kpis" id="h-kpis"></div>
+  <div class="card">
+    <h2>Températures</h2>
+    <div class="legend" id="h-leg-t"></div>
+    <div class="chart-wrap"><canvas id="h-temp" height="220"></canvas><div class="tip" id="h-tip-temp"></div></div>
+  </div>
+  <div class="card">
+    <h2>Puissances moyennes (quart d'heure)</h2>
+    <div class="legend" id="h-leg-p"></div>
+    <div class="chart-wrap"><canvas id="h-pow" height="240"></canvas><div class="tip" id="h-tip-pow"></div></div>
+  </div>
+  <div class="hist-row">
+    <div class="card">
+      <h2>Corps de chauffe par jour</h2>
+      <div class="legend" id="h-leg-d"></div>
+      <div class="chart-wrap"><canvas id="h-days" height="220"></canvas><div class="tip" id="h-tip-days"></div></div>
+    </div>
+    <div class="card">
+      <h2>Bilan par jour</h2>
+      <div class="hist-table"><table class="kv-table" id="h-table"></table></div>
+    </div>
+  </div>
+</section>
+
 <!-- ================================================================ Trace Modbus -->
 <section class="tab wide" id="tab-trace" hidden>
   <div class="card">
@@ -564,5 +617,6 @@ pre.yaml { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; background: 
 <script src="app.js"></script>
 <script src="trace.js"></script>
 <script src="config.js"></script>
+<script src="history.js"></script>
 </body>
 </html>

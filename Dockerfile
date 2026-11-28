@@ -32,7 +32,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     STATE_FILE=/data/state.json
 
 WORKDIR /app
-COPY askoheat_sim.py household.py registers.py index.html app.js trace.js config.js ./
+COPY askoheat_sim.py household.py registers.py index.html app.js trace.js config.js history.js ./
 
 # Répertoire d'état : un volume nommé hérite de ce propriétaire (utilisateur nobody, comme sur le cluster)
 RUN mkdir /data && chown 65534:65534 /data

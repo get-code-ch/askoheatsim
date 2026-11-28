@@ -85,6 +85,11 @@ docker run -d --name askoheatsim --restart unless-stopped -p 8080:8080 -p 502:50
   PV, maison, réseau, vitesse), chauffe-eau, pilotage, graphique combiné températures / puissances, journée simulée
   (puisages, bilan, jours précédents). Les réglages (mesure d'injection, simulation, ménage et PV, entrées de
   l'appareil, écriture de registre) sont dans le tiroir « ⚙ Réglages ».
+- **Historique** : plusieurs jours de simulation (2, 7 ou 14 jours, en temps simulé) : chiffres clés de la période
+  (énergie du corps de chauffe et part PV, production PV, maison, soutirage, injection, eau puisée, températures),
+  courbes des températures haut / bride et des puissances moyennes au quart d'heure (corps de chauffe, PV, maison,
+  réseau), énergie du corps de chauffe par jour (depuis le PV / depuis le réseau) et tableau des bilans journaliers.
+  Avec la simulation accélérée (×3600 : un jour en 24 s), quatorze jours se remplissent en moins de six minutes.
 - **Échanges Modbus** : chaque transaction (requête ▶ en bleu, réponse ◀ en vert, exception en rouge), avec l'en-tête
   MBAP grisé et, à côté des octets bruts, chaque registre interprété (nom, valeur avec unité, flags d'état en clair,
   float32, numéro de série). Détail de la transaction sélectionnée au-dessus du tableau ; registres principaux et
@@ -105,7 +110,7 @@ L'état est unique : un réglage changé par un visiteur l'est pour tous.
 Avec `STATE_FILE` (déployé : `/data/state.json` sur le volume Longhorn `askoheatsim-state`, 256 Mi), le simulateur
 sauvegarde son état toutes les 10 s et à l'arrêt (SIGTERM : sauvegarde puis sortie propre), et le relit au démarrage :
 configuration 502-504, 510, 595 et 500-599, mode piloté / autonome, profil du ménage, réglages de simulation,
-températures, compteurs du bloc 600 et bilans journaliers. Les commandes 318-320 ne sont pas conservées (watchdog).
+températures, compteurs du bloc 600, bilans journaliers et historique (14 jours, un point par quart d'heure, ~200 Ko). Les commandes 318-320 ne sont pas conservées (watchdog).
 Les variables d'environnement ne servent alors qu'au premier démarrage et aux **réglages d'usine** : bouton du tiroir
 « Entrées de l'appareil » ou écriture du registre **211** (comme sur l'appareil) ; le ménage et l'eau ne changent pas.
 Le Deployment utilise la stratégie `Recreate` : le volume RWO est libéré par l'ancien pod avant le démarrage du nouveau.

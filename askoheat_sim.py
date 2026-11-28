@@ -6,7 +6,8 @@ Simulateur ASKOHEAT+ 2.0 (vendu par Domotec sous la référence DWP EHF 3.5 PV F
   (http://www.download.askoma.com/askofamily_plus/modbus/askoheat-modbus.html, v1.16)
 - Modèle thermique simple d'un chauffe-eau à deux couches (haut / bas)
 - Profil de ménage (household.py) : puisages, consommation de la maison, production PV
-- Interface web (http://<hôte>:8080/) et API JSON (/api/state, /api/control, /api/frames, /api/grid)
+- Interface web (http://<hôte>:8080/) et API JSON (/api/state, /api/control, /api/frames, /api/grid,
+  /api/history : 14 jours simulés au quart d'heure + bilans journaliers)
 
 Uniquement la bibliothèque standard Python (>= 3.10). Aucune dépendance.
 
@@ -41,7 +42,7 @@ import struct
 import sys
 import time
 from collections import deque
-from datetime import timezone, timedelta
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))     # household.py, à côté de ce fichier
@@ -73,6 +74,9 @@ MAX_CLIENTS = 8                 # le vrai appareil accepte 8 connexions
 WATCHDOG_S = 60                 # registres 200-202 effacés après 60 s
 THERMOSTAT_HYST = 3.0           # °C
 SUBSTEP_S = 10.0                # pas de calcul maximal en temps simulé
+HIST_BUCKET_S = 900             # historique multi-jours : un point par quart d'heure simulé
+HIST_DAYS = 14                  # jours conservés (historique et bilans journaliers)
+HIST_KEYS = ("up", "low", "heater", "pv", "house", "imp", "exp", "tap")
 
 # Registres de commande / configuration (écriture autorisée)
 REG_STEP, REG_SETPOINT, REG_FEEDIN = 200, 201, 202
@@ -181,6 +185,9 @@ class Simulator:
         self.aliases: dict[str, str] = {}
         self.events = deque(maxlen=80)
         self.history = deque(maxlen=600)
+        # Historique multi-jours (temps simulé) : moyennes par quart d'heure, voir account()
+        self.series = deque(maxlen=HIST_DAYS * 86400 // HIST_BUCKET_S)
+        self.bucket = None               # quart d'heure en cours : {"k": index, "dt": s, sommes…}
         self.frames = deque(maxlen=2000) # trace Modbus
         self.frame_seq = 0
         self.started = time.time()
@@ -423,7 +430,7 @@ class Simulator:
             d = self.days[key] = {"date": key, "tap_l": 0.0, "tank_l": 0.0, "heater_kwh": 0.0,
                                   "pv_kwh": 0.0, "house_kwh": 0.0, "heater_pv_kwh": 0.0,
                                   "import_kwh": 0.0, "export_kwh": 0.0, "cold_min": 0.0}
-            for old in sorted(self.days)[:-8]:
+            for old in sorted(self.days)[:-HIST_DAYS]:
                 del self.days[old]
         h = dt / 3600
         d["tap_l"] += self.tap_lpm * dt / 60
@@ -438,6 +445,56 @@ class Simulator:
         d["export_kwh"] += max(0.0, -grid) * h / 1000
         if self.cold_tap and self.tap_lpm > 0:
             d["cold_min"] += dt / 60
+        self.sample(now, dt, grid)
+
+    def sample(self, now, dt: float, grid: float):
+        """Cumule le pas dans le quart d'heure en cours ; à chaque nouveau quart d'heure, le précédent
+        devient un point de l'historique (moyennes : °C, W ; tap : litres puisés)."""
+        k = int(now.timestamp() // HIST_BUCKET_S)
+        b = self.bucket
+        if b is not None and b["k"] != k:
+            self.close_bucket()
+            b = None
+        if b is None:
+            b = self.bucket = {"k": k, "dt": 0.0, **{key: 0.0 for key in HIST_KEYS}}
+        b["dt"] += dt
+        b["up"] += self.t_up * dt
+        b["low"] += self.t_low * dt
+        b["heater"] += self.load_w * dt
+        b["pv"] += self.pv_w * dt
+        b["house"] += self.house_w * dt
+        b["imp"] += max(0.0, grid) * dt
+        b["exp"] += max(0.0, -grid) * dt
+        b["tap"] += self.tap_lpm * dt / 60
+
+    def bucket_point(self, b: dict) -> dict:
+        t = datetime.fromtimestamp(b["k"] * HIST_BUCKET_S, self.house.tz)
+        n = b["dt"] or 1.0
+        pt = {"t": t.strftime("%Y-%m-%dT%H:%M")}
+        for key in HIST_KEYS:
+            pt[key] = round(b[key], 1) if key == "tap" else round(b[key] / n, 2 if key in ("up", "low") else 0)
+        return pt
+
+    def close_bucket(self):
+        b = self.bucket
+        if b and b["dt"] > 0:
+            self.series.append(self.bucket_point(b))
+        self.bucket = None
+
+    def clear_history(self):
+        self.days.clear()
+        self.history.clear()
+        self.series.clear()
+        self.bucket = None
+
+    def history_api(self) -> dict:
+        pts = list(self.series)
+        if self.bucket and self.bucket["dt"] > 0:
+            pts.append({**self.bucket_point(self.bucket), "partial": True})
+        return {"bucket_min": HIST_BUCKET_S // 60, "keep_days": HIST_DAYS, "points": pts,
+                "sim_now": self.house.now(self.sim_time).strftime("%Y-%m-%dT%H:%M"),
+                "days": [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in d.items()}
+                         for _, d in sorted(self.days.items())]}
 
     def litres_40(self) -> float:
         """Eau mitigée à 40 °C disponible (approximation)."""
@@ -482,7 +539,8 @@ class Simulator:
         d = {k: getattr(self, k) for k in self.PERSIST}
         d.update(version=1, saved=time.strftime("%Y-%m-%d %H:%M:%S"),
                  conf={str(a): v for a, v in self.conf.items()}, stats=self.st,
-                 household=self.house.p, start=self.house.start.isoformat(), days=self.days)
+                 household=self.house.p, start=self.house.start.isoformat(), days=self.days,
+                 series=list(self.series), bucket=self.bucket)
         return d
 
     def restore(self, d: dict):
@@ -502,6 +560,10 @@ class Simulator:
             self.house.set_start(d["start"])
         if isinstance(d.get("days"), dict):
             self.days = d["days"]
+        if isinstance(d.get("series"), list):
+            self.series.extend(p for p in d["series"] if isinstance(p, dict) and "t" in p)
+        if isinstance(d.get("bucket"), dict) and all(k in d["bucket"] for k in ("k", "dt", *HIST_KEYS)):
+            self.bucket = d["bucket"]
         self.event(f"État restauré (sauvegarde du {d.get('saved', '?')})")
 
     def factory_reset(self, src: str):
@@ -707,8 +769,7 @@ class Simulator:
         if "start" in d:
             self.house.set_start(str(d["start"]))
             self.sim_time = 0.0
-            self.days.clear()
-            self.history.clear()
+            self.clear_history()
             self.event(f"Horloge simulée : départ le {self.house.start:%d.%m.%Y %H:%M}", "web")
         if "write" in d:
             # Depuis l'interface web : seulement les commandes 200-202.
@@ -950,6 +1011,7 @@ STATIC = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/trace.js": ("trace.js", "text/javascript; charset=utf-8"),
     "/config.js": ("config.js", "text/javascript; charset=utf-8"),
+    "/history.js": ("history.js", "text/javascript; charset=utf-8"),
 }
 
 
@@ -984,6 +1046,8 @@ async def http_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
             out = (HERE / name).read_bytes()
         elif method == "GET" and path == "/api/state":
             out = json.dumps(SIM.state()).encode()
+        elif method == "GET" and path == "/api/history":
+            out = json.dumps(SIM.history_api()).encode()
         elif method == "GET" and path == "/api/frames":
             try:
                 seq = int(params.get("after", "0"))

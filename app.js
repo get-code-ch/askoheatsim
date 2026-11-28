@@ -10,7 +10,7 @@ async function post(d) {
 }
 
 // ------------------------------------------------------------------ onglets
-const TABS = ['sim', 'trace', 'config'];
+const TABS = ['sim', 'hist', 'trace', 'config'];
 function showTab(name) {
   if (!TABS.includes(name)) name = 'sim';
   document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
